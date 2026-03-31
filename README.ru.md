@@ -93,6 +93,10 @@ tests/                  Тесты
 python3 -m pytest tests/ -v
 ```
 
+## Дисклеймер
+
+Это независимый проект сообщества. Он не связан с [Anthropic](https://anthropic.com), не одобрен и не поддерживается ими. Claude Code — продукт Anthropic.
+
 ## Лицензия
 
 [MIT](LICENSE)

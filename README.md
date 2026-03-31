@@ -93,6 +93,10 @@ The hook is configured as an async Stop event in Claude Code. On each response:
 python3 -m pytest tests/ -v
 ```
 
+## Disclaimer
+
+This is an independent community project. It is not affiliated with, endorsed by, or officially connected to [Anthropic](https://anthropic.com) in any way. Claude Code is a product of Anthropic.
+
 ## License
 
 [MIT](LICENSE)
