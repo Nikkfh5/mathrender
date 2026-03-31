@@ -1,0 +1,7 @@
+.enabled
+.server.pid
+.last_hook_input.json
+.claude/
+__pycache__/
+.pytest_cache/
+*.pyc

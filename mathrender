@@ -1,0 +1,78 @@
+#!/bin/bash
+# MathRender — управление из терминала
+# Использование: mathrender on | off | pause | resume | status
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+FLAG="$DIR/.enabled"
+PORT=18573
+URL="http://127.0.0.1:$PORT"
+
+case "${1:-status}" in
+  on)
+    touch "$FLAG"
+    # Запуск сервера если не запущен
+    if ! curl -s "$URL/health" >/dev/null 2>&1; then
+      python3 "$DIR/server.py" &>/dev/null &
+      for i in $(seq 1 20); do
+        curl -s "$URL/health" >/dev/null 2>&1 && break
+        sleep 0.1
+      done
+    fi
+    # Снимаем паузу если была
+    curl -s -X POST "$URL/resume" >/dev/null 2>&1
+    # Открываем окно
+    open "$URL"
+    echo "MathRender включён"
+    ;;
+
+  off)
+    rm -f "$FLAG"
+    # Останавливаем сервер по PID
+    PIDFILE="$DIR/.server.pid"
+    if [ -f "$PIDFILE" ]; then
+      PID=$(cat "$PIDFILE")
+      if kill -0 "$PID" 2>/dev/null; then
+        kill "$PID"
+      fi
+      rm -f "$PIDFILE"
+    fi
+    echo "MathRender выключен"
+    ;;
+
+  pause)
+    if curl -s -X POST "$URL/pause" >/dev/null 2>&1; then
+      echo "MathRender на паузе"
+    else
+      echo "MathRender не запущен"
+    fi
+    ;;
+
+  resume)
+    if curl -s -X POST "$URL/resume" >/dev/null 2>&1; then
+      echo "MathRender возобновлён"
+    else
+      echo "MathRender не запущен"
+    fi
+    ;;
+
+  status)
+    if [ -f "$FLAG" ]; then
+      if curl -s "$URL/health" >/dev/null 2>&1; then
+        PAUSED=$(curl -s "$URL/health" | python3 -c "import sys,json;print(json.load(sys.stdin).get('paused',False))" 2>/dev/null)
+        if [ "$PAUSED" = "True" ]; then
+          echo "MathRender: включён, на паузе"
+        else
+          echo "MathRender: включён, работает"
+        fi
+      else
+        echo "MathRender: включён, сервер не запущен"
+      fi
+    else
+      echo "MathRender: выключен"
+    fi
+    ;;
+
+  *)
+    echo "Использование: mathrender {on|off|pause|resume|status}"
+    ;;
+esac
