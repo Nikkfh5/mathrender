@@ -5,3 +5,8 @@
 __pycache__/
 .pytest_cache/
 *.pyc
+
+# VS Code extension build
+extension/node_modules/
+extension/out/
+extension/*.vsix

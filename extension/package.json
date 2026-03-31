@@ -1,0 +1,41 @@
+{
+  "name": "mathrender",
+  "displayName": "MathRender",
+  "description": "Renders LaTeX formulas from Claude Code in a VS Code panel",
+  "version": "0.1.0",
+  "publisher": "mathrender",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "mathrender.show",
+        "title": "MathRender: Show Panel"
+      },
+      {
+        "command": "mathrender.on",
+        "title": "MathRender: Enable"
+      },
+      {
+        "command": "mathrender.off",
+        "title": "MathRender: Disable"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

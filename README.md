@@ -1,6 +1,6 @@
 # MathRender
 
-Renders LaTeX formulas from Claude Code in a browser window. Instead of reading raw `$$\int_0^1 x^2 dx$$` in the terminal, you see beautifully rendered math in real time.
+Renders LaTeX formulas from Claude Code in a VS Code panel. Instead of reading raw `$$\int_0^1 x^2 dx$$` in the terminal, you see beautifully rendered math in real time.
 
 ## How it works
 
@@ -11,68 +11,68 @@ Claude Code responds with formulas
         |
     Parses LaTeX from response
         |
-    Sends full response to local server
+    Sends to VS Code extension (localhost HTTP)
         |
-    Browser renders markdown + KaTeX
+    WebView panel renders markdown + KaTeX
 ```
 
 - Full response rendering: text + formulas together, like a textbook
-- Auto-start: server launches automatically when needed
-- Auto-stop: server shuts down when Claude Code session ends
-- Zero dependencies: Python 3 stdlib + KaTeX from CDN
+- Zero config: open the panel and it just works
+- Zero dependencies: Python 3 stdlib for the hook, KaTeX from CDN
 - Session history: scroll back through all responses
-- Pause/resume: temporarily stop capturing without closing the window
+- Pause/resume: temporarily stop capturing without closing the panel
 
 ## Requirements
 
-- **macOS only** (tested on M3 Pro)
+- **Windows** (also works on macOS/Linux)
 - Python 3.10+
-- Claude Code CLI
-- Any browser
+- Claude Code CLI or VS Code extension
+- VS Code
 
 ## Install
 
+### 1. Add the hook to Claude Code
+
 ```bash
-git clone https://github.com/CKeJIeToH4uK/mathrender.git && cd mathrender
-./install.sh
+python install.py
 ```
 
-This will:
-1. Add a Stop hook to `~/.claude/settings.json` (sends formulas to the server)
-2. Add a SessionEnd hook (auto-stops the server when the session ends)
-3. Add a `mathrender` alias to your shell
+### 2. Build and install the VS Code extension
 
-Restart your terminal after installation.
+```bash
+cd extension
+npm install
+npm run compile
+npx @vscode/vsce package
+code --install-extension mathrender-0.1.0.vsix
+```
 
 ## Usage
 
-```bash
-mathrender on       # start server + open browser window
-mathrender off      # stop everything
-mathrender pause    # keep window, stop capturing new responses
-mathrender resume   # resume capturing
-mathrender status   # check current state
-```
+In VS Code, open Command Palette (`Ctrl+Shift+P`) and run:
 
-MathRender is **off by default**. Turn it on when you need it. It automatically turns off when you close the Claude Code session.
+- **MathRender: Show Panel** — open the formula panel (also starts the server)
+- **MathRender: Disable** — stop everything
+
+MathRender is **off by default**. Open the panel when you need it. It stays active until you disable it or close VS Code.
 
 ## Uninstall
 
 ```bash
-./uninstall.sh
+python uninstall.py
+code --uninstall-extension mathrender.mathrender
 ```
-
-Removes hooks and alias. Project files remain in the directory.
 
 ## Project structure
 
 ```
-server.py               HTTP server with SSE (stdlib, no deps)
-index.html              Frontend: markdown + KaTeX rendering
+extension/              VS Code extension (TypeScript)
+  src/extension.ts      HTTP server + WebView + commands
+  media/index.html      Frontend: markdown + KaTeX rendering
+  package.json          Extension manifest
 hook_send_formulas.py   Claude Code Stop hook
-mathrender              CLI control script (on/off/pause/resume)
-install.sh              Installation script
-uninstall.sh            Uninstallation script
+install.py              Hook installer
+uninstall.py            Hook uninstaller
 tests/                  Test suite
 ```
 
@@ -80,17 +80,16 @@ tests/                  Test suite
 
 The hook is configured as an async Stop event in Claude Code. On each response:
 
-1. Bash checks if `.enabled` flag exists (microseconds, no Python if off)
-2. If enabled, Python checks if the server is paused
-3. If not paused, checks if the response contains LaTeX (`$$...$$`, `$...$`, `\[...\]`, `\(...\)`)
-4. If formulas found, sends the full response text to the local server
-5. Server pushes it to the browser via SSE
-6. Browser renders markdown with KaTeX
+1. Python checks if the MathRender server is running (HTTP health check)
+2. If running and not paused, checks if the response contains LaTeX (`$$...$$`, `$...$`, `\[...\]`, `\(...\)`)
+3. If formulas found, sends the full response text to the VS Code extension
+4. Extension pushes it to the WebView panel via postMessage
+5. WebView renders markdown with KaTeX
 
 ## Running tests
 
 ```bash
-python3 -m pytest tests/ -v
+python -m pytest tests/ -v
 ```
 
 ## Disclaimer

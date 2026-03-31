@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               style-src 'unsafe-inline' https://cdn.jsdelivr.net;
+               script-src 'unsafe-inline' https://cdn.jsdelivr.net;
+               font-src https://cdn.jsdelivr.net;
+               connect-src https://cdn.jsdelivr.net;">
 <title>MathRender</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -25,7 +31,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text', 'Helvetica Neue', sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     height: 100vh;
@@ -68,7 +74,6 @@
     box-shadow: 0 0 6px rgba(42, 157, 78, 0.5);
     animation: pulse-dot 3s ease-in-out infinite;
   }
-  .status-dot.disconnected { background: #d44; box-shadow: 0 0 6px rgba(221, 68, 68, 0.5); }
   @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
   .btn {
@@ -144,7 +149,7 @@
     background: var(--bg-code);
     padding: 2px 6px;
     border-radius: 4px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: 'Cascadia Code', 'SF Mono', 'Fira Code', monospace;
     font-size: 13px;
     color: #c8c8d8;
   }
@@ -204,7 +209,7 @@
   .katex-error {
     color: #e05555;
     font-size: 13px;
-    font-family: 'SF Mono', monospace;
+    font-family: 'Cascadia Code', 'SF Mono', monospace;
   }
 
   /* Empty state */
@@ -250,16 +255,14 @@
   <div class="counter" id="counter"></div>
 
 <script>
+const vscode = acquireVsCodeApi();
 const feed = document.getElementById('feed');
 const emptyState = document.getElementById('emptyState');
-const statusDot = document.getElementById('statusDot');
 const counter = document.getElementById('counter');
+const pauseBtn = document.getElementById('pauseBtn');
 let responseCount = 0;
-let historyLoaded = 0;  // сколько записей из истории уже показано
-let eventSource = null;
 let autoScroll = true;
 let paused = false;
-const pauseBtn = document.getElementById('pauseBtn');
 
 // Настраиваем marked
 marked.setOptions({
@@ -279,14 +282,14 @@ function renderMathInText(text) {
     return `%%CODEBLOCK_${codeBlocks.length - 1}%%`;
   });
 
-  // Display math: $$...$$ → placeholder
+  // Display math: $$...$$ -> placeholder
   const displayMaths = [];
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, latex) => {
     displayMaths.push(latex.trim());
     return `%%DISPLAYMATH_${displayMaths.length - 1}%%`;
   });
 
-  // Inline math: $...$ → placeholder
+  // Inline math: $...$ -> placeholder
   const inlineMaths = [];
   text = text.replace(/(?<!\$)\$(?!\$)([^$]+?)\$(?!\$)/g, (_, latex) => {
     inlineMaths.push(latex.trim());
@@ -346,8 +349,7 @@ function togglePause() {
   pauseBtn.textContent = paused ? 'Resume' : 'Pause';
   pauseBtn.style.borderColor = paused ? '#d44' : '';
   pauseBtn.style.color = paused ? '#d44' : '';
-  // Ставим/снимаем флаг на сервере
-  fetch(paused ? '/pause' : '/resume', { method: 'POST' });
+  vscode.postMessage({ command: paused ? 'pause' : 'resume' });
 }
 
 function addResponse(data) {
@@ -385,13 +387,17 @@ feed.addEventListener('scroll', () => {
 
 // Обратная совместимость: старый формат с отдельными формулами
 function addFormulaGroup(data) {
-  const text = (data.context ? data.context + '\n\n' : '') +
-    (data.formulas || []).map(f => `$$${f}$$`).join('\n\n');
+  let parsed = data;
+  if (typeof data.text === 'string' && data.type === 'formulas') {
+    try { parsed = JSON.parse(data.text); } catch (e) { /* ignore */ }
+  }
+  const text = (parsed.context ? parsed.context + '\n\n' : '') +
+    (parsed.formulas || []).map(f => `$$${f}$$`).join('\n\n');
   addResponse({ text, timestamp: data.timestamp });
 }
 
 function clearFeed() {
-  fetch('/clear', { method: 'POST' });
+  vscode.postMessage({ command: 'clear' });
   feed.innerHTML = '';
   feed.appendChild(emptyState);
   emptyState.style.display = '';
@@ -413,40 +419,38 @@ function pluralize(n, one, few, many) {
   return many;
 }
 
-function connectSSE() {
-  if (eventSource) eventSource.close();
-  eventSource = new EventSource('/events');
-  eventSource.onopen = () => {
-    statusDot.classList.remove('disconnected');
-    // После реконнекта подгружаем пропущенные ответы
-    loadHistory();
-  };
-  eventSource.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      if (data.type === 'response') addResponse(data);
-      else if (data.type === 'formulas') addFormulaGroup(data);
-      else if (data.type === 'clear') clearFeed();
-    } catch (err) {}
-  };
-  eventSource.onerror = () => { statusDot.classList.add('disconnected'); };
-}
+// Receive messages from VS Code extension
+window.addEventListener('message', event => {
+  const data = event.data;
+  switch (data.type) {
+    case 'response':
+      addResponse(data);
+      break;
+    case 'formulas':
+      addFormulaGroup(data);
+      break;
+    case 'clear':
+      feed.innerHTML = '';
+      feed.appendChild(emptyState);
+      emptyState.style.display = '';
+      responseCount = 0;
+      updateCounter();
+      break;
+    case 'history':
+      (data.entries || []).forEach(entry => {
+        if (entry.type === 'response') addResponse(entry);
+        else if (entry.type === 'formulas') addFormulaGroup(entry);
+      });
+      break;
+    case 'paused':
+      paused = data.paused;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.style.borderColor = paused ? '#d44' : '';
+      pauseBtn.style.color = paused ? '#d44' : '';
+      break;
+  }
+});
 
-async function loadHistory() {
-  try {
-    const res = await fetch('/history');
-    const data = await res.json();
-    // Показываем только новые записи (пропускаем уже загруженные)
-    const newEntries = data.slice(historyLoaded);
-    newEntries.forEach(entry => {
-      if (entry.type === 'response') addResponse(entry);
-      else addFormulaGroup(entry);
-    });
-    historyLoaded = data.length;
-  } catch (e) {}
-}
-
-loadHistory().then(() => connectSSE());
 updateCounter();
 </script>
 </body>

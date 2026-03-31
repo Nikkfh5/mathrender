@@ -1,6 +1,6 @@
 # MathRender
 
-Рендерит LaTeX-формулы из Claude Code в окне браузера. Вместо сырого `$$\int_0^1 x^2 dx$$` в терминале — красивые формулы в реальном времени.
+Рендерит LaTeX-формулы из Claude Code в панели VS Code. Вместо сырого `$$\int_0^1 x^2 dx$$` в терминале — красивые формулы в реальном времени.
 
 ## Как это работает
 
@@ -11,68 +11,68 @@ Claude Code отвечает с формулами
         |
     Парсит LaTeX из ответа
         |
-    Отправляет на локальный сервер
+    Отправляет в VS Code расширение (localhost HTTP)
         |
-    Браузер рендерит markdown + KaTeX
+    WebView-панель рендерит markdown + KaTeX
 ```
 
 - Полный рендер ответа: текст + формулы вместе, как в учебнике
-- Автозапуск: сервер поднимается автоматически при необходимости
-- Автоостановка: сервер выключается при завершении сессии Claude Code
-- Без зависимостей: Python 3 stdlib + KaTeX с CDN
+- Без настройки: открыл панель — работает
+- Без зависимостей: Python 3 stdlib для хука, KaTeX с CDN
 - История: можно скроллить назад и смотреть все ответы за сессию
-- Пауза: можно приостановить без закрытия окна
+- Пауза: можно приостановить без закрытия панели
 
 ## Требования
 
-- **Только macOS** (протестировано на M3 Pro)
+- **Windows** (также работает на macOS/Linux)
 - Python 3.10+
-- Claude Code CLI
-- Любой браузер
+- Claude Code CLI или VS Code extension
+- VS Code
 
 ## Установка
 
+### 1. Добавить хук в Claude Code
+
 ```bash
-git clone https://github.com/CKeJIeToH4uK/mathrender.git && cd mathrender
-./install.sh
+python install.py
 ```
 
-Скрипт:
-1. Добавит Stop-хук в `~/.claude/settings.json` (отправляет формулы на сервер)
-2. Добавит SessionEnd-хук (автоматически выключает сервер при завершении сессии)
-3. Добавит алиас `mathrender` в ваш shell
+### 2. Собрать и установить VS Code расширение
 
-После установки перезапустите терминал.
+```bash
+cd extension
+npm install
+npm run compile
+npx @vscode/vsce package
+code --install-extension mathrender-0.1.0.vsix
+```
 
 ## Использование
 
-```bash
-mathrender on       # включить: запускает сервер + открывает окно
-mathrender off      # выключить всё
-mathrender pause    # окно остаётся, новые ответы не добавляются
-mathrender resume   # возобновить
-mathrender status   # проверить состояние
-```
+В VS Code откройте Command Palette (`Ctrl+Shift+P`) и выполните:
 
-По умолчанию MathRender **выключен**. Включайте когда нужно. При завершении сессии Claude Code выключается автоматически.
+- **MathRender: Show Panel** — открыть панель с формулами (также запускает сервер)
+- **MathRender: Disable** — выключить всё
+
+По умолчанию MathRender **выключен**. Откройте панель когда нужно. Она остаётся активной пока не выключите или не закроете VS Code.
 
 ## Удаление
 
 ```bash
-./uninstall.sh
+python uninstall.py
+code --uninstall-extension mathrender.mathrender
 ```
-
-Удаляет хуки и алиас. Файлы проекта остаются в директории.
 
 ## Структура проекта
 
 ```
-server.py               HTTP-сервер с SSE (stdlib, без зависимостей)
-index.html              Фронтенд: рендер markdown + KaTeX
+extension/              VS Code расширение (TypeScript)
+  src/extension.ts      HTTP-сервер + WebView + команды
+  media/index.html      Фронтенд: рендер markdown + KaTeX
+  package.json          Манифест расширения
 hook_send_formulas.py   Хук Claude Code (Stop-событие)
-mathrender              CLI-скрипт управления (on/off/pause/resume)
-install.sh              Скрипт установки
-uninstall.sh            Скрипт удаления
+install.py              Установщик хуков
+uninstall.py            Удаление хуков
 tests/                  Тесты
 ```
 
@@ -80,17 +80,16 @@ tests/                  Тесты
 
 Хук настроен как асинхронное Stop-событие в Claude Code. На каждый ответ:
 
-1. Bash проверяет наличие файла `.enabled` (микросекунды, Python не запускается если выключен)
-2. Если включён — Python проверяет, не на паузе ли сервер
-3. Если не на паузе — проверяет, есть ли в ответе LaTeX (`$$...$$`, `$...$`, `\[...\]`, `\(...\)`)
-4. Если формулы найдены — отправляет полный текст ответа на локальный сервер
-5. Сервер пушит его в браузер через SSE
-6. Браузер рендерит markdown с KaTeX
+1. Python проверяет, запущен ли сервер MathRender (HTTP health check)
+2. Если запущен и не на паузе — проверяет, есть ли в ответе LaTeX (`$$...$$`, `$...$`, `\[...\]`, `\(...\)`)
+3. Если формулы найдены — отправляет полный текст ответа в VS Code расширение
+4. Расширение передаёт данные в WebView-панель через postMessage
+5. WebView рендерит markdown с KaTeX
 
 ## Запуск тестов
 
 ```bash
-python3 -m pytest tests/ -v
+python -m pytest tests/ -v
 ```
 
 ## Дисклеймер
