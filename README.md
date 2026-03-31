@@ -33,7 +33,7 @@ Claude Code responds with formulas
 ## Install
 
 ```bash
-git clone https://github.com/bboychenko/mathrender.git && cd mathrender
+git clone https://github.com/CKeJIeToH4uK/mathrender.git && cd mathrender
 ./install.sh
 ```
 

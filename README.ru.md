@@ -33,7 +33,7 @@ Claude Code отвечает с формулами
 ## Установка
 
 ```bash
-git clone https://github.com/bboychenko/mathrender.git && cd mathrender
+git clone https://github.com/CKeJIeToH4uK/mathrender.git && cd mathrender
 ./install.sh
 ```
 
@@ -95,6 +95,4 @@ python3 -m pytest tests/ -v
 
 ## Лицензия
 
-Проект предоставляется **только для личного и образовательного использования**. Коммерческое использование запрещено без явного разрешения автора.
-
-Проект не связан с Anthropic и не одобрен ими.
+[MIT](LICENSE)
