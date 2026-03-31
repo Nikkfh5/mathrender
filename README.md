@@ -95,6 +95,4 @@ python3 -m pytest tests/ -v
 
 ## License
 
-This project is provided for **personal and educational use only**. Commercial use is not permitted without explicit permission from the author.
-
-This project is not affiliated with or endorsed by Anthropic.
+[MIT](LICENSE)
