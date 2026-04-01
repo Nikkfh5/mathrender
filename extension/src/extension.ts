@@ -2,12 +2,16 @@ import * as vscode from 'vscode';
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 const HOST = '127.0.0.1';
 const PORT = 18573;
 const MAX_BODY = 1024 * 1024; // 1 MB
 const MAX_HISTORY = 500;
 const PAGE_SIZE = 50;
+const HOOK_DIR = path.join(os.homedir(), '.mathrender');
+const HOOK_FILE = path.join(HOOK_DIR, 'hook_send_formulas.py');
+const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 
 interface HistoryEntry {
     type: string;
@@ -26,12 +30,81 @@ let server: http.Server | undefined;
 let history: HistoryEntry[] = [];
 let paused = false;
 
+// --- Hook auto-install ---
+
+function ensureHookInstalled(extensionUri: vscode.Uri): void {
+    try {
+        // Copy hook script to ~/.mathrender/
+        if (!fs.existsSync(HOOK_DIR)) {
+            fs.mkdirSync(HOOK_DIR, { recursive: true });
+        }
+        const srcHook = path.join(extensionUri.fsPath, 'media', 'hook_send_formulas.py');
+        if (fs.existsSync(srcHook)) {
+            fs.copyFileSync(srcHook, HOOK_FILE);
+        }
+
+        // Add hook to ~/.claude/settings.json
+        if (!fs.existsSync(CLAUDE_SETTINGS)) {
+            return; // Claude Code not installed
+        }
+
+        const raw = fs.readFileSync(CLAUDE_SETTINGS, 'utf-8');
+        let settings: Record<string, unknown>;
+        try {
+            settings = JSON.parse(raw);
+        } catch {
+            return; // corrupted settings
+        }
+
+        const hookPath = HOOK_FILE.replace(/\\/g, '/');
+        const isWindows = process.platform === 'win32';
+        const hookCmd = isWindows
+            ? `python "${hookPath}"`
+            : `python3 "${hookPath}"`;
+
+        if (!settings.hooks || typeof settings.hooks !== 'object') {
+            settings.hooks = {};
+        }
+        const hooks = settings.hooks as Record<string, unknown[]>;
+
+        if (!Array.isArray(hooks.Stop)) {
+            hooks.Stop = [];
+        }
+
+        // Check if already installed
+        const alreadyInstalled = hooks.Stop.some((entry: any) =>
+            entry?.hooks?.some((h: any) =>
+                typeof h?.command === 'string' && h.command.includes('hook_send_formulas')
+            )
+        );
+
+        if (!alreadyInstalled) {
+            hooks.Stop.push({
+                hooks: [{
+                    type: 'command',
+                    command: hookCmd,
+                    timeout: 5,
+                    async: true,
+                }]
+            });
+            fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+            vscode.window.showInformationMessage('MathRender: Hook installed for Claude Code');
+        }
+    } catch (err) {
+        console.error('[MathRender] Hook install error:', err);
+    }
+}
+
+// --- History ---
+
 function addToHistory(entry: HistoryEntry): void {
     if (history.length >= MAX_HISTORY) {
         history.shift();
     }
     history.push(entry);
 }
+
+// --- HTTP ---
 
 function readBody(req: http.IncomingMessage): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -174,6 +247,8 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
     return srv;
 }
 
+// --- WebView ---
+
 let cachedHtml: string | undefined;
 
 function getWebviewHtml(extensionUri: vscode.Uri): string {
@@ -217,7 +292,6 @@ function showPanel(context: vscode.ExtensionContext): void {
 
     panel.webview.html = getWebviewHtml(context.extensionUri);
 
-    // Send history in pages to avoid flooding WebView
     if (history.length > 0) {
         for (let i = 0; i < history.length; i += PAGE_SIZE) {
             const page = history.slice(i, i + PAGE_SIZE);
@@ -225,7 +299,6 @@ function showPanel(context: vscode.ExtensionContext): void {
         }
     }
 
-    // Handle messages from WebView (pause/resume/clear)
     panel.webview.onDidReceiveMessage(
         (message) => {
             switch (message.command) {
@@ -268,11 +341,20 @@ function stopAll(): void {
     vscode.window.showInformationMessage('MathRender disabled');
 }
 
+// --- Activation ---
+
 export function activate(context: vscode.ExtensionContext): void {
+    // Auto-install hook on first activation
+    ensureHookInstalled(context.extensionUri);
+
     context.subscriptions.push(
         vscode.commands.registerCommand('mathrender.show', () => showPanel(context)),
         vscode.commands.registerCommand('mathrender.on', () => showPanel(context)),
         vscode.commands.registerCommand('mathrender.off', () => stopAll()),
+        vscode.commands.registerCommand('mathrender.setupHook', () => {
+            ensureHookInstalled(context.extensionUri);
+            vscode.window.showInformationMessage('MathRender: Hook check complete');
+        }),
     );
 }
 

@@ -34,24 +34,19 @@ The extension runs a lightweight HTTP server inside VS Code. A Claude Code hook 
 
 ## Quick Start
 
-### 1. Install the hook
+### 1. Install the extension
 
-```bash
-# Clone the repo
-git clone https://github.com/Nikkfh5/mathrender.git
-cd mathrender
-
-# Add the hook to Claude Code
-python install.py
-```
+Install from VS Code Marketplace — search for **MathRender** in Extensions (`Ctrl+Shift+X`).
 
 ### 2. Open the panel
 
-In VS Code, press `Ctrl+Shift+P` and run:
+Press `Ctrl+Shift+P` and run:
 
 > **MathRender: Show Panel**
 
-That's it. Start asking Claude Code about math and formulas will appear in the panel.
+That's it. The extension **automatically installs** the Claude Code hook on first launch. No cloning, no scripts, no extra setup. Start asking Claude about math and formulas will appear in the panel.
+
+> **Note:** Python 3.10+ must be installed and available as `python` (Windows) or `python3` (macOS/Linux).
 
 ## Commands
 
@@ -60,6 +55,7 @@ That's it. Start asking Claude Code about math and formulas will appear in the p
 | `MathRender: Show Panel` | Open the formula panel (starts the server) |
 | `MathRender: Enable` | Same as Show Panel |
 | `MathRender: Disable` | Stop server and close panel |
+| `MathRender: Setup Hook` | Reinstall the Claude Code hook (if needed) |
 
 ## Panel Controls
 

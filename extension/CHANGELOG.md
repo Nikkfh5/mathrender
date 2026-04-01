@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 — 2026-04-01
+
+- Auto-install: extension automatically sets up Claude Code hook on first launch
+- No cloning or manual scripts needed — install from Marketplace and go
+- New command: `MathRender: Setup Hook` for manual reinstall
+- Hook script bundled inside the extension package
+
 ## 0.1.0 — 2026-04-01
 
 Initial release.

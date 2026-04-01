@@ -2,7 +2,7 @@
   "name": "mathrender",
   "displayName": "MathRender — LaTeX Formula Renderer for Claude Code",
   "description": "Renders LaTeX formulas from Claude Code responses in a beautiful VS Code side panel with KaTeX. See math as it's meant to be seen.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "Nikkfh5",
   "author": {
     "name": "Nikkfh5",
@@ -56,6 +56,11 @@
       {
         "command": "mathrender.off",
         "title": "Disable",
+        "category": "MathRender"
+      },
+      {
+        "command": "mathrender.setupHook",
+        "title": "Setup Hook",
         "category": "MathRender"
       }
     ]
