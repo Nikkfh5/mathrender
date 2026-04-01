@@ -77,8 +77,8 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                         jsonResponse(res, 200, { status: 'ok', paused });
                         break;
                     case '/history': {
-                        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
-                        const limit = parseInt(url.searchParams.get('limit') || String(history.length), 10);
+                        const offset = parseInt(url.searchParams.get('offset') || '0', 10) || 0;
+                        const limit = parseInt(url.searchParams.get('limit') || String(history.length), 10) || history.length;
                         jsonResponse(res, 200, history.slice(offset, offset + limit));
                         break;
                     }

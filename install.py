@@ -39,8 +39,12 @@ def install():
     print("[OK] Claude Code settings found")
 
     # Read settings
-    with open(settings_path, "r", encoding="utf-8") as f:
-        settings = json.load(f)
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+    except json.JSONDecodeError:
+        print(f"Error: {settings_path} contains invalid JSON. Fix it manually or delete and restart Claude Code.")
+        sys.exit(1)
 
     hook_cmd = get_hook_command()
 

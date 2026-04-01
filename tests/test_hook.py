@@ -9,8 +9,6 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from hook_send_formulas import has_formulas
-
 import hook_send_formulas
 
 
