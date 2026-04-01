@@ -11,6 +11,7 @@ const MAX_HISTORY = 500;
 const PAGE_SIZE = 50;
 const HOOK_DIR = path.join(os.homedir(), '.mathrender');
 const HOOK_FILE = path.join(HOOK_DIR, 'hook_send_formulas.py');
+const HISTORY_FILE = path.join(HOOK_DIR, 'history.json');
 const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 
 interface HistoryEntry {
@@ -29,12 +30,13 @@ let panel: vscode.WebviewPanel | undefined;
 let server: http.Server | undefined;
 let history: HistoryEntry[] = [];
 let paused = false;
+let unreadCount = 0;
+let sidebarView: vscode.TreeView<string> | undefined;
 
 // --- Hook auto-install ---
 
 function ensureHookInstalled(extensionUri: vscode.Uri): void {
     try {
-        // Copy hook script to ~/.mathrender/
         if (!fs.existsSync(HOOK_DIR)) {
             fs.mkdirSync(HOOK_DIR, { recursive: true });
         }
@@ -47,9 +49,8 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
             }
         }
 
-        // Add hook to ~/.claude/settings.json
         if (!fs.existsSync(CLAUDE_SETTINGS)) {
-            return; // Claude Code not installed
+            return;
         }
 
         const raw = fs.readFileSync(CLAUDE_SETTINGS, 'utf-8');
@@ -57,7 +58,7 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
         try {
             settings = JSON.parse(raw);
         } catch {
-            return; // corrupted settings
+            return;
         }
 
         const hookPath = HOOK_FILE.replace(/\\/g, '/');
@@ -75,7 +76,6 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
             hooks.Stop = [];
         }
 
-        // Check if already installed
         const alreadyInstalled = hooks.Stop.some((entry: any) =>
             entry?.hooks?.some((h: any) =>
                 typeof h?.command === 'string' && h.command.includes('hook_send_formulas')
@@ -96,6 +96,43 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
         }
     } catch (err) {
         console.error('[MathRender] Hook install error:', err);
+    }
+}
+
+// --- History persistence ---
+
+function loadHistory(): void {
+    try {
+        if (fs.existsSync(HISTORY_FILE)) {
+            const raw = fs.readFileSync(HISTORY_FILE, 'utf-8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                history = parsed.slice(-MAX_HISTORY);
+            }
+        }
+    } catch (err) {
+        console.error('[MathRender] Failed to load history:', err);
+    }
+}
+
+function saveHistory(): void {
+    try {
+        if (!fs.existsSync(HOOK_DIR)) {
+            fs.mkdirSync(HOOK_DIR, { recursive: true });
+        }
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify(history), 'utf-8');
+    } catch (err) {
+        console.error('[MathRender] Failed to save history:', err);
+    }
+}
+
+// --- Badge ---
+
+function updateBadge(): void {
+    if (sidebarView) {
+        sidebarView.badge = unreadCount > 0
+            ? { value: unreadCount, tooltip: `${unreadCount} new formulas` }
+            : undefined;
     }
 }
 
@@ -215,6 +252,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                         break;
                     case '/clear':
                         history = [];
+                        saveHistory();
                         jsonResponse(res, 200, { ok: true });
                         panel?.webview.postMessage({ type: 'clear' });
                         break;
@@ -276,11 +314,19 @@ function showPanel(context: vscode.ExtensionContext): void {
             } catch (err) {
                 console.error('[MathRender] postMessage error:', err);
             }
+            // Badge: increment if panel not visible
+            if (!panel || !panel.visible) {
+                unreadCount++;
+                updateBadge();
+            }
+            saveHistory();
         });
     }
 
     if (panel) {
         panel.reveal();
+        unreadCount = 0;
+        updateBadge();
         return;
     }
 
@@ -303,6 +349,14 @@ function showPanel(context: vscode.ExtensionContext): void {
         }
     }
 
+    // Reset badge when panel becomes visible
+    panel.onDidChangeViewState(() => {
+        if (panel?.visible) {
+            unreadCount = 0;
+            updateBadge();
+        }
+    });
+
     panel.webview.onDidReceiveMessage(
         (message) => {
             switch (message.command) {
@@ -314,7 +368,19 @@ function showPanel(context: vscode.ExtensionContext): void {
                     break;
                 case 'clear':
                     history = [];
+                    saveHistory();
                     break;
+                case 'export': {
+                    const texContent = history
+                        .filter(e => e.type === 'response')
+                        .map(e => e.text)
+                        .join('\n\n---\n\n');
+                    vscode.workspace.openTextDocument({
+                        content: texContent,
+                        language: 'latex',
+                    }).then(doc => vscode.window.showTextDocument(doc));
+                    break;
+                }
             }
         },
         undefined,
@@ -328,9 +394,13 @@ function showPanel(context: vscode.ExtensionContext): void {
         null,
         context.subscriptions
     );
+
+    unreadCount = 0;
+    updateBadge();
 }
 
 function stopAll(): void {
+    saveHistory();
     if (server) {
         server.close();
         server = undefined;
@@ -342,14 +412,26 @@ function stopAll(): void {
     history = [];
     paused = false;
     cachedHtml = undefined;
+    unreadCount = 0;
+    updateBadge();
     vscode.window.showInformationMessage('MathRender disabled');
 }
 
 // --- Activation ---
 
 export function activate(context: vscode.ExtensionContext): void {
-    // Auto-install hook on first activation
     ensureHookInstalled(context.extensionUri);
+    loadHistory();
+
+    // Sidebar tree view for badge
+    const treeDataProvider: vscode.TreeDataProvider<string> = {
+        getTreeItem: () => new vscode.TreeItem(''),
+        getChildren: () => [],
+    };
+    sidebarView = vscode.window.createTreeView('mathrender.sidebar', {
+        treeDataProvider,
+    });
+    context.subscriptions.push(sidebarView);
 
     context.subscriptions.push(
         vscode.commands.registerCommand('mathrender.show', () => showPanel(context)),
@@ -359,6 +441,7 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
+    saveHistory();
     if (server) {
         server.close();
         server = undefined;

@@ -193,6 +193,22 @@
   .response-card:hover .copy-btn { opacity: 1; }
   .copy-btn:hover { background: var(--copy-bg-hover); color: var(--text-secondary); }
   .copy-btn.copied { color: #2a9d4e; }
+  .svg-btn {
+    padding: 3px 8px;
+    border: none;
+    border-radius: 4px;
+    background: var(--copy-bg);
+    color: var(--text-dim);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    opacity: 0;
+    margin-left: 4px;
+  }
+  .response-card:hover .svg-btn { opacity: 1; }
+  .svg-btn:hover { background: var(--copy-bg-hover); color: var(--text-secondary); }
+
+  mark { background: rgba(124, 106, 239, 0.3); color: inherit; border-radius: 2px; padding: 0 1px; }
 
   /* Markdown content */
   .response-body { line-height: 1.7; font-size: 15px; }
@@ -311,6 +327,7 @@
     <div class="header-controls">
       <div class="status-dot" id="statusDot"></div>
       <button class="btn" onclick="toggleSearch()" id="searchBtn" title="Ctrl+F">Search</button>
+      <button class="btn" onclick="exportTex()">Export</button>
       <button class="btn" onclick="togglePause()" id="pauseBtn">Pause</button>
       <button class="btn" onclick="clearFeed()">Clear</button>
     </div>
@@ -463,6 +480,7 @@ function toggleSearch() {
   } else {
     searchInput.value = '';
     filterCards('');
+    feed.querySelectorAll('.response-body').forEach(b => clearHighlights(b));
   }
 }
 
@@ -487,14 +505,52 @@ function filterCards(query) {
   let visible = 0;
   cards.forEach(card => {
     const raw = cardData.get(card) || '';
+    const body = card.querySelector('.response-body');
     if (!query || raw.toLowerCase().includes(query)) {
       card.classList.remove('hidden');
       visible++;
+      // Highlight matches
+      if (body && query) {
+        highlightText(body, query);
+      } else if (body) {
+        clearHighlights(body);
+      }
     } else {
       card.classList.add('hidden');
     }
   });
   emptyState.style.display = (visible === 0 && responseCount > 0) ? '' : 'none';
+}
+
+function highlightText(el, query) {
+  clearHighlights(el);
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const matches = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const idx = node.textContent.toLowerCase().indexOf(query);
+    if (idx >= 0) matches.push({ node, idx });
+  }
+  matches.forEach(({ node, idx }) => {
+    const range = document.createRange();
+    range.setStart(node, idx);
+    range.setEnd(node, idx + query.length);
+    const mark = document.createElement('mark');
+    range.surroundContents(mark);
+  });
+}
+
+function clearHighlights(el) {
+  el.querySelectorAll('mark').forEach(m => {
+    const parent = m.parentNode;
+    parent.replaceChild(document.createTextNode(m.textContent), m);
+    parent.normalize();
+  });
+}
+
+// --- Export ---
+function exportTex() {
+  vscode.postMessage({ command: 'export' });
 }
 
 // --- Copy ---
@@ -512,6 +568,30 @@ function copySource(btn) {
     btn.textContent = 'Failed';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
   });
+}
+
+function copySvg(btn) {
+  const card = btn.closest('.response-card');
+  const mathEls = card.querySelectorAll('.math-display .katex, .math-inline .katex');
+  if (mathEls.length === 0) {
+    btn.textContent = 'No math';
+    setTimeout(() => { btn.textContent = 'SVG'; }, 1500);
+    return;
+  }
+  const svgParts = [];
+  mathEls.forEach(el => {
+    const svg = el.querySelector('svg');
+    if (svg) svgParts.push(svg.outerHTML);
+  });
+  if (svgParts.length > 0) {
+    navigator.clipboard.writeText(svgParts.join('\n')).then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'SVG'; }, 1500);
+    }).catch(() => {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'SVG'; }, 1500);
+    });
+  }
 }
 
 function addResponse(data) {
@@ -538,6 +618,12 @@ function addResponse(data) {
   copyBtn.textContent = 'Copy';
   copyBtn.onclick = function() { copySource(this); };
   hdr.appendChild(copyBtn);
+
+  const svgBtn = document.createElement('button');
+  svgBtn.className = 'svg-btn';
+  svgBtn.textContent = 'SVG';
+  svgBtn.onclick = function() { copySvg(this); };
+  hdr.appendChild(svgBtn);
 
   card.appendChild(hdr);
 
