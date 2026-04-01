@@ -40,7 +40,11 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
         }
         const srcHook = path.join(extensionUri.fsPath, 'media', 'hook_send_formulas.py');
         if (fs.existsSync(srcHook)) {
-            fs.copyFileSync(srcHook, HOOK_FILE);
+            const srcContent = fs.readFileSync(srcHook);
+            const dstExists = fs.existsSync(HOOK_FILE);
+            if (!dstExists || !srcContent.equals(fs.readFileSync(HOOK_FILE))) {
+                fs.copyFileSync(srcHook, HOOK_FILE);
+            }
         }
 
         // Add hook to ~/.claude/settings.json
@@ -174,7 +178,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                         const entry: HistoryEntry = {
                             type: 'response',
                             text: data.text || '',
-                            timestamp: data.timestamp || new Date().toLocaleTimeString('ru-RU'),
+                            timestamp: data.timestamp || new Date().toLocaleTimeString(),
                         };
                         addToHistory(entry);
                         onResponse(entry);
@@ -192,7 +196,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                         const entry: HistoryEntry = {
                             type: 'formulas',
                             text: JSON.stringify(data),
-                            timestamp: new Date().toLocaleTimeString('ru-RU'),
+                            timestamp: new Date().toLocaleTimeString(),
                         };
                         addToHistory(entry);
                         onResponse(entry);
@@ -351,10 +355,6 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('mathrender.show', () => showPanel(context)),
         vscode.commands.registerCommand('mathrender.on', () => showPanel(context)),
         vscode.commands.registerCommand('mathrender.off', () => stopAll()),
-        vscode.commands.registerCommand('mathrender.setupHook', () => {
-            ensureHookInstalled(context.extensionUri);
-            vscode.window.showInformationMessage('MathRender: Hook check complete');
-        }),
     );
 }
 
