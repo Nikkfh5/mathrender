@@ -15,16 +15,22 @@ interface HistoryEntry {
     timestamp: string;
 }
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 let panel: vscode.WebviewPanel | undefined;
 let server: http.Server | undefined;
 let history: HistoryEntry[] = [];
 let paused = false;
 
 function addToHistory(entry: HistoryEntry): void {
-    history.push(entry);
-    if (history.length > MAX_HISTORY) {
-        history = history.slice(-MAX_HISTORY);
+    if (history.length >= MAX_HISTORY) {
+        history.shift();
     }
+    history.push(entry);
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -49,9 +55,7 @@ function jsonResponse(res: http.ServerResponse, status: number, data: unknown): 
     const body = JSON.stringify(data);
     res.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        ...CORS_HEADERS,
     });
     res.end(body);
 }
@@ -61,11 +65,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
         const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
 
         if (req.method === 'OPTIONS') {
-            res.writeHead(204, {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
-            });
+            res.writeHead(204, CORS_HEADERS);
             res.end();
             return;
         }

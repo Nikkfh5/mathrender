@@ -346,19 +346,18 @@ let paused = false;
 // Store raw text for search + copy
 const cardData = new WeakMap();
 
-// Sanitize HTML from marked to prevent XSS
 function sanitizeHtml(html) {
-  // Remove dangerous tags and attributes
   const div = document.createElement('div');
   div.innerHTML = html;
-  // Remove script tags
   div.querySelectorAll('script, iframe, object, embed, form').forEach(el => el.remove());
-  // Remove event handlers and javascript: links
-  div.querySelectorAll('*').forEach(el => {
+  div.querySelectorAll('[onclick],[onload],[onerror],[onmouseover],[onfocus]').forEach(el => {
     for (const attr of [...el.attributes]) {
-      if (attr.name.startsWith('on') || (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:'))) {
-        el.removeAttribute(attr.name);
-      }
+      if (attr.name.startsWith('on')) el.removeAttribute(attr.name);
+    }
+  });
+  div.querySelectorAll('a[href]').forEach(el => {
+    if (el.getAttribute('href').trim().toLowerCase().startsWith('javascript:')) {
+      el.removeAttribute('href');
     }
   });
   return div.innerHTML;
@@ -437,11 +436,23 @@ function escapeHtml(s) {
   return p.innerHTML;
 }
 
+function updatePauseUI(isPaused) {
+  pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+  pauseBtn.style.borderColor = isPaused ? '#d44' : '';
+  pauseBtn.style.color = isPaused ? '#d44' : '';
+}
+
+function resetFeed() {
+  feed.innerHTML = '';
+  feed.appendChild(emptyState);
+  emptyState.style.display = '';
+  responseCount = 0;
+  updateCounter();
+}
+
 function togglePause() {
   paused = !paused;
-  pauseBtn.textContent = paused ? 'Resume' : 'Pause';
-  pauseBtn.style.borderColor = paused ? '#d44' : '';
-  pauseBtn.style.color = paused ? '#d44' : '';
+  updatePauseUI(paused);
   vscode.postMessage({ command: paused ? 'pause' : 'resume' });
 }
 
@@ -456,8 +467,10 @@ function toggleSearch() {
   }
 }
 
+let filterTimeout;
 searchInput.addEventListener('input', () => {
-  filterCards(searchInput.value.toLowerCase());
+  clearTimeout(filterTimeout);
+  filterTimeout = setTimeout(() => filterCards(searchInput.value.toLowerCase()), 150);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -483,7 +496,6 @@ function filterCards(query) {
     }
   });
   emptyState.style.display = (visible === 0 && responseCount > 0) ? '' : 'none';
-  if (visible > 0) emptyState.style.display = 'none';
 }
 
 // --- Copy ---
@@ -560,11 +572,7 @@ function addFormulaGroup(data) {
 
 function clearFeed() {
   vscode.postMessage({ command: 'clear' });
-  feed.innerHTML = '';
-  feed.appendChild(emptyState);
-  emptyState.style.display = '';
-  responseCount = 0;
-  updateCounter();
+  resetFeed();
   searchInput.value = '';
   searchBar.classList.remove('visible');
 }
@@ -594,11 +602,7 @@ window.addEventListener('message', event => {
       addFormulaGroup(data);
       break;
     case 'clear':
-      feed.innerHTML = '';
-      feed.appendChild(emptyState);
-      emptyState.style.display = '';
-      responseCount = 0;
-      updateCounter();
+      resetFeed();
       break;
     case 'history':
       (data.entries || []).forEach(entry => {
@@ -608,9 +612,7 @@ window.addEventListener('message', event => {
       break;
     case 'paused':
       paused = data.paused;
-      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
-      pauseBtn.style.borderColor = paused ? '#d44' : '';
-      pauseBtn.style.color = paused ? '#d44' : '';
+      updatePauseUI(paused);
       break;
   }
 });
