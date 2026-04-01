@@ -1,30 +1,62 @@
 {
   "name": "mathrender",
-  "displayName": "MathRender",
-  "description": "Renders LaTeX formulas from Claude Code in a VS Code panel",
+  "displayName": "MathRender — LaTeX Formula Renderer for Claude Code",
+  "description": "Renders LaTeX formulas from Claude Code responses in a beautiful VS Code side panel with KaTeX. See math as it's meant to be seen.",
   "version": "0.1.0",
-  "publisher": "mathrender",
+  "publisher": "Nikkfh5",
+  "author": {
+    "name": "Nikkfh5",
+    "email": "v-353@yandex.com"
+  },
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nikkfh5/mathrender"
+  },
+  "bugs": {
+    "url": "https://github.com/Nikkfh5/mathrender/issues"
+  },
+  "homepage": "https://github.com/Nikkfh5/mathrender#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Visualization",
     "Other"
   ],
+  "keywords": [
+    "latex",
+    "math",
+    "formula",
+    "katex",
+    "claude",
+    "claude-code",
+    "render",
+    "markdown"
+  ],
+  "galleryBanner": {
+    "color": "#0a0a0f",
+    "theme": "dark"
+  },
   "main": "./out/extension.js",
   "activationEvents": [],
   "contributes": {
     "commands": [
       {
         "command": "mathrender.show",
-        "title": "MathRender: Show Panel"
+        "title": "Show Panel",
+        "category": "MathRender"
       },
       {
         "command": "mathrender.on",
-        "title": "MathRender: Enable"
+        "title": "Enable",
+        "category": "MathRender"
       },
       {
         "command": "mathrender.off",
-        "title": "MathRender: Disable"
+        "title": "Disable",
+        "category": "MathRender"
       }
     ]
   },
