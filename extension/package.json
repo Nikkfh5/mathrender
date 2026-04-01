@@ -62,7 +62,7 @@
     "viewsWelcome": [
       {
         "view": "mathrender.sidebar",
-        "contents": "Render LaTeX formulas from Claude Code.\n[$(play) Open Panel](command:mathrender.show)\n[$(gear) Setup Hook](command:mathrender.setupHook)"
+        "contents": "Render LaTeX formulas from Claude Code.\n[$(play) Open Panel](command:mathrender.show)"
       }
     ],
     "commands": [
