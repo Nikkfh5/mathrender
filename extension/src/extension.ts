@@ -6,6 +6,8 @@ import * as path from 'path';
 const HOST = '127.0.0.1';
 const PORT = 18573;
 const MAX_BODY = 1024 * 1024; // 1 MB
+const MAX_HISTORY = 500;
+const PAGE_SIZE = 50;
 
 interface HistoryEntry {
     type: string;
@@ -18,9 +20,16 @@ let server: http.Server | undefined;
 let history: HistoryEntry[] = [];
 let paused = false;
 
+function addToHistory(entry: HistoryEntry): void {
+    history.push(entry);
+    if (history.length > MAX_HISTORY) {
+        history = history.slice(-MAX_HISTORY);
+    }
+}
+
 function readBody(req: http.IncomingMessage): Promise<string> {
     return new Promise((resolve, reject) => {
-        let body = '';
+        const chunks: Buffer[] = [];
         let size = 0;
         req.on('data', (chunk: Buffer) => {
             size += chunk.length;
@@ -29,9 +38,9 @@ function readBody(req: http.IncomingMessage): Promise<string> {
                 reject(new Error('Request too large'));
                 return;
             }
-            body += chunk.toString();
+            chunks.push(chunk);
         });
-        req.on('end', () => resolve(body));
+        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
         req.on('error', reject);
     });
 }
@@ -39,7 +48,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 function jsonResponse(res: http.ServerResponse, status: number, data: unknown): void {
     const body = JSON.stringify(data);
     res.writeHead(status, {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
@@ -67,9 +76,12 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                     case '/health':
                         jsonResponse(res, 200, { status: 'ok', paused });
                         break;
-                    case '/history':
-                        jsonResponse(res, 200, history);
+                    case '/history': {
+                        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+                        const limit = parseInt(url.searchParams.get('limit') || String(history.length), 10);
+                        jsonResponse(res, 200, history.slice(offset, offset + limit));
                         break;
+                    }
                     case '/status':
                         jsonResponse(res, 200, { paused });
                         break;
@@ -91,7 +103,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                             text: data.text || '',
                             timestamp: data.timestamp || new Date().toLocaleTimeString('ru-RU'),
                         };
-                        history.push(entry);
+                        addToHistory(entry);
                         onResponse(entry);
                         jsonResponse(res, 200, { ok: true });
                         break;
@@ -109,7 +121,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                             text: JSON.stringify(data),
                             timestamp: new Date().toLocaleTimeString('ru-RU'),
                         };
-                        history.push(entry);
+                        addToHistory(entry);
                         onResponse(entry);
                         jsonResponse(res, 200, { ok: true, count: (data.formulas || []).length });
                         break;
@@ -136,7 +148,12 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                 jsonResponse(res, 405, { error: 'Method not allowed' });
             }
         } catch (err) {
-            jsonResponse(res, 500, { error: 'Internal server error' });
+            console.error('[MathRender] Request error:', err);
+            try {
+                jsonResponse(res, 500, { error: 'Internal server error' });
+            } catch {
+                // response already sent or destroyed
+            }
         }
     });
 
@@ -157,15 +174,29 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
     return srv;
 }
 
-function getWebviewHtml(extensionUri: vscode.Uri, webview: vscode.Webview): string {
-    const htmlPath = path.join(extensionUri.fsPath, 'media', 'index.html');
-    return fs.readFileSync(htmlPath, 'utf-8');
+let cachedHtml: string | undefined;
+
+function getWebviewHtml(extensionUri: vscode.Uri): string {
+    if (!cachedHtml) {
+        const htmlPath = path.join(extensionUri.fsPath, 'media', 'index.html');
+        try {
+            cachedHtml = fs.readFileSync(htmlPath, 'utf-8');
+        } catch (err) {
+            console.error('[MathRender] Failed to read index.html:', err);
+            return '<html><body><h1>Error: index.html not found</h1></body></html>';
+        }
+    }
+    return cachedHtml;
 }
 
 function showPanel(context: vscode.ExtensionContext): void {
     if (!server) {
         server = startHttpServer((entry) => {
-            panel?.webview.postMessage(entry);
+            try {
+                panel?.webview.postMessage(entry);
+            } catch (err) {
+                console.error('[MathRender] postMessage error:', err);
+            }
         });
     }
 
@@ -184,11 +215,14 @@ function showPanel(context: vscode.ExtensionContext): void {
         }
     );
 
-    panel.webview.html = getWebviewHtml(context.extensionUri, panel.webview);
+    panel.webview.html = getWebviewHtml(context.extensionUri);
 
-    // Send history to newly opened panel
+    // Send history in pages to avoid flooding WebView
     if (history.length > 0) {
-        panel.webview.postMessage({ type: 'history', entries: history });
+        for (let i = 0; i < history.length; i += PAGE_SIZE) {
+            const page = history.slice(i, i + PAGE_SIZE);
+            panel.webview.postMessage({ type: 'history', entries: page });
+        }
     }
 
     // Handle messages from WebView (pause/resume/clear)
@@ -230,6 +264,7 @@ function stopAll(): void {
     }
     history = [];
     paused = false;
+    cachedHtml = undefined;
     vscode.window.showInformationMessage('MathRender disabled');
 }
 
@@ -247,4 +282,5 @@ export function deactivate(): void {
         server = undefined;
     }
     panel = undefined;
+    cachedHtml = undefined;
 }

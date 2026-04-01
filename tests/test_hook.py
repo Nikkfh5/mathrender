@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 """Tests for Claude Code hook."""
 
+import io
 import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from hook_send_formulas import has_formulas
 
 import hook_send_formulas
+
+
+def make_stdin_mock(data: str):
+    """Create a stdin mock with .buffer attribute returning BytesIO."""
+    mock = MagicMock()
+    mock.buffer = io.BytesIO(data.encode('utf-8'))
+    return mock
 
 
 class TestHookInputParsing(unittest.TestCase):
@@ -25,7 +33,7 @@ class TestHookInputParsing(unittest.TestCase):
 
         with patch.object(hook_send_formulas, 'send_response', fake_send), \
              patch.object(hook_send_formulas, 'server_status', return_value={"status": "ok", "paused": False}), \
-             patch('sys.stdin', __import__('io').StringIO(input_data)):
+             patch('sys.stdin', make_stdin_mock(input_data)):
             hook_send_formulas.main()
 
         return sent[0] if sent else None
@@ -106,7 +114,7 @@ class TestServerHealthCheck(unittest.TestCase):
 
         with patch.object(hook_send_formulas, 'send_response', lambda t: sent.append(t)), \
              patch.object(hook_send_formulas, 'server_status', return_value=None), \
-             patch('sys.stdin', __import__('io').StringIO(data)):
+             patch('sys.stdin', make_stdin_mock(data)):
             hook_send_formulas.main()
 
         self.assertEqual(len(sent), 0)
@@ -122,7 +130,7 @@ class TestServerHealthCheck(unittest.TestCase):
 
         with patch.object(hook_send_formulas, 'send_response', lambda t: sent.append(t)), \
              patch.object(hook_send_formulas, 'server_status', return_value={"status": "ok", "paused": False}), \
-             patch('sys.stdin', __import__('io').StringIO(data)):
+             patch('sys.stdin', make_stdin_mock(data)):
             hook_send_formulas.main()
 
         self.assertEqual(len(sent), 1)
@@ -142,7 +150,7 @@ class TestPauseCheck(unittest.TestCase):
 
         with patch.object(hook_send_formulas, 'send_response', lambda t: sent.append(t)), \
              patch.object(hook_send_formulas, 'server_status', return_value={"status": "ok", "paused": True}), \
-             patch('sys.stdin', __import__('io').StringIO(data)):
+             patch('sys.stdin', make_stdin_mock(data)):
             hook_send_formulas.main()
 
         self.assertEqual(len(sent), 0)

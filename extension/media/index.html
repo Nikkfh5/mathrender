@@ -14,7 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
-  :root {
+  /* Dark theme (default) */
+  :root, body.vscode-dark, body.vscode-high-contrast {
     --bg-primary: #0a0a0f;
     --bg-card: #12121a;
     --bg-card-hover: #16161f;
@@ -26,6 +27,31 @@
     --accent: #7c6aef;
     --accent-dim: rgba(124, 106, 239, 0.1);
     --accent-glow: rgba(124, 106, 239, 0.15);
+    --scrollbar-thumb: #2a2a3a;
+    --strong-color: #fff;
+    --copy-bg: rgba(255,255,255,0.06);
+    --copy-bg-hover: rgba(255,255,255,0.12);
+    --search-bg: #12121a;
+  }
+
+  /* Light theme */
+  body.vscode-light {
+    --bg-primary: #ffffff;
+    --bg-card: #f8f8fa;
+    --bg-card-hover: #f0f0f4;
+    --bg-code: #f0f0f5;
+    --border: #e0e0e6;
+    --text-primary: #1a1a2e;
+    --text-secondary: #5a5a72;
+    --text-dim: #a0a0b0;
+    --accent: #6b57e0;
+    --accent-dim: rgba(107, 87, 224, 0.08);
+    --accent-glow: rgba(107, 87, 224, 0.12);
+    --scrollbar-thumb: #c8c8d4;
+    --strong-color: #000;
+    --copy-bg: rgba(0,0,0,0.04);
+    --copy-bg-hover: rgba(0,0,0,0.08);
+    --search-bg: #f8f8fa;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -42,7 +68,7 @@
 
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 
   /* Header */
   header {
@@ -66,7 +92,7 @@
   .logo-text { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
   .logo-version { font-size: 11px; color: var(--text-dim); font-weight: 400; }
 
-  .header-controls { display: flex; align-items: center; gap: 12px; }
+  .header-controls { display: flex; align-items: center; gap: 8px; }
 
   .status-dot {
     width: 7px; height: 7px; border-radius: 50%;
@@ -88,6 +114,29 @@
   }
   .btn:hover { background: var(--bg-card); color: var(--text-primary); }
 
+  /* Search bar */
+  .search-bar {
+    padding: 8px 24px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: none;
+  }
+  .search-bar.visible { display: block; }
+  .search-input {
+    width: 100%;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--search-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+
   /* Feed */
   .feed {
     flex: 1;
@@ -105,22 +154,45 @@
     margin-bottom: 16px;
     animation: slide-in 0.3s ease-out;
     transition: border-color 0.2s ease;
+    position: relative;
   }
   .response-card.fresh {
     animation: glow-fade 2s ease-out forwards;
   }
+  .response-card.hidden { display: none; }
   @keyframes slide-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes glow-fade {
     from { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
     to { border-color: var(--border); box-shadow: none; }
   }
 
+  .response-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
   .response-time {
     font-size: 11px;
     color: var(--text-dim);
-    margin-bottom: 12px;
     font-variant-numeric: tabular-nums;
   }
+
+  .copy-btn {
+    padding: 3px 8px;
+    border: none;
+    border-radius: 4px;
+    background: var(--copy-bg);
+    color: var(--text-dim);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    opacity: 0;
+  }
+  .response-card:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { background: var(--copy-bg-hover); color: var(--text-secondary); }
+  .copy-btn.copied { color: #2a9d4e; }
 
   /* Markdown content */
   .response-body { line-height: 1.7; font-size: 15px; }
@@ -136,7 +208,7 @@
 
   .response-body p { margin: 8px 0; }
 
-  .response-body strong { font-weight: 600; color: #fff; }
+  .response-body strong { font-weight: 600; color: var(--strong-color); }
   .response-body em { font-style: italic; color: var(--text-secondary); }
 
   .response-body ul, .response-body ol {
@@ -151,7 +223,7 @@
     border-radius: 4px;
     font-family: 'Cascadia Code', 'SF Mono', 'Fira Code', monospace;
     font-size: 13px;
-    color: #c8c8d8;
+    color: var(--text-secondary);
   }
 
   .response-body pre {
@@ -193,7 +265,7 @@
 
   /* KaTeX display math */
   .math-display {
-    background: rgba(124, 106, 239, 0.04);
+    background: var(--accent-dim);
     border-left: 3px solid var(--accent);
     border-radius: 0 8px 8px 0;
     padding: 16px 20px;
@@ -238,10 +310,15 @@
     </div>
     <div class="header-controls">
       <div class="status-dot" id="statusDot"></div>
+      <button class="btn" onclick="toggleSearch()" id="searchBtn" title="Ctrl+F">Search</button>
       <button class="btn" onclick="togglePause()" id="pauseBtn">Pause</button>
       <button class="btn" onclick="clearFeed()">Clear</button>
     </div>
   </header>
+
+  <div class="search-bar" id="searchBar">
+    <input class="search-input" id="searchInput" type="text" placeholder="Search formulas and text...">
+  </div>
 
   <div class="feed" id="feed">
     <div class="empty-state" id="emptyState">
@@ -260,18 +337,40 @@ const feed = document.getElementById('feed');
 const emptyState = document.getElementById('emptyState');
 const counter = document.getElementById('counter');
 const pauseBtn = document.getElementById('pauseBtn');
+const searchBar = document.getElementById('searchBar');
+const searchInput = document.getElementById('searchInput');
 let responseCount = 0;
 let autoScroll = true;
 let paused = false;
 
-// Настраиваем marked
+// Store raw text for search + copy
+const cardData = new WeakMap();
+
+// Sanitize HTML from marked to prevent XSS
+function sanitizeHtml(html) {
+  // Remove dangerous tags and attributes
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  // Remove script tags
+  div.querySelectorAll('script, iframe, object, embed, form').forEach(el => el.remove());
+  // Remove event handlers and javascript: links
+  div.querySelectorAll('*').forEach(el => {
+    for (const attr of [...el.attributes]) {
+      if (attr.name.startsWith('on') || (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:'))) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+  return div.innerHTML;
+}
+
+// Marked config
 marked.setOptions({
   breaks: true,
   gfm: true,
 });
 
 function renderMathInText(text) {
-  // Защищаем код-блоки от обработки LaTeX
   const codeBlocks = [];
   text = text.replace(/```[\s\S]*?```/g, (m) => {
     codeBlocks.push(m);
@@ -282,33 +381,27 @@ function renderMathInText(text) {
     return `%%CODEBLOCK_${codeBlocks.length - 1}%%`;
   });
 
-  // Display math: $$...$$ -> placeholder
   const displayMaths = [];
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, latex) => {
     displayMaths.push(latex.trim());
     return `%%DISPLAYMATH_${displayMaths.length - 1}%%`;
   });
 
-  // Inline math: $...$ -> placeholder
   const inlineMaths = [];
   text = text.replace(/(?<!\$)\$(?!\$)([^$]+?)\$(?!\$)/g, (_, latex) => {
     inlineMaths.push(latex.trim());
     return `%%INLINEMATH_${inlineMaths.length - 1}%%`;
   });
 
-  // Восстанавливаем код-блоки
   text = text.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => codeBlocks[parseInt(i)]);
 
-  // Рендерим markdown
-  let html = marked.parse(text);
+  let html = sanitizeHtml(marked.parse(text));
 
-  // Рендерим display math
   html = html.replace(/%%DISPLAYMATH_(\d+)%%/g, (_, i) => {
     const latex = displayMaths[parseInt(i)];
     return renderKatex(latex, true);
   });
 
-  // Рендерим inline math
   html = html.replace(/%%INLINEMATH_(\d+)%%/g, (_, i) => {
     const latex = inlineMaths[parseInt(i)];
     return renderKatex(latex, false);
@@ -322,8 +415,8 @@ function renderKatex(latex, displayMode) {
     const html = katex.renderToString(latex, {
       displayMode: displayMode,
       throwOnError: false,
-      strict: false,
-      trust: true,
+      strict: 'warn',
+      trust: false,
       macros: {
         "\\R": "\\mathbb{R}", "\\N": "\\mathbb{N}",
         "\\Z": "\\mathbb{Z}", "\\C": "\\mathbb{C}", "\\Q": "\\mathbb{Q}",
@@ -352,20 +445,91 @@ function togglePause() {
   vscode.postMessage({ command: paused ? 'pause' : 'resume' });
 }
 
+// --- Search ---
+function toggleSearch() {
+  searchBar.classList.toggle('visible');
+  if (searchBar.classList.contains('visible')) {
+    searchInput.focus();
+  } else {
+    searchInput.value = '';
+    filterCards('');
+  }
+}
+
+searchInput.addEventListener('input', () => {
+  filterCards(searchInput.value.toLowerCase());
+});
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    toggleSearch();
+  }
+  if (e.key === 'Escape' && searchBar.classList.contains('visible')) {
+    toggleSearch();
+  }
+});
+
+function filterCards(query) {
+  const cards = feed.querySelectorAll('.response-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const raw = cardData.get(card) || '';
+    if (!query || raw.toLowerCase().includes(query)) {
+      card.classList.remove('hidden');
+      visible++;
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+  emptyState.style.display = (visible === 0 && responseCount > 0) ? '' : 'none';
+  if (visible > 0) emptyState.style.display = 'none';
+}
+
+// --- Copy ---
+function copySource(btn) {
+  const card = btn.closest('.response-card');
+  const raw = cardData.get(card) || '';
+  navigator.clipboard.writeText(raw).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
 function addResponse(data) {
   emptyState.style.display = 'none';
 
   const card = document.createElement('div');
   card.className = 'response-card fresh';
 
+  // Store raw text for search + copy
+  const rawText = data.text || '';
+  cardData.set(card, rawText);
+
+  // Header: timestamp + copy button
+  const hdr = document.createElement('div');
+  hdr.className = 'response-header';
+
   const time = document.createElement('div');
   time.className = 'response-time';
   time.textContent = data.timestamp || new Date().toLocaleTimeString('ru-RU');
-  card.appendChild(time);
+  hdr.appendChild(time);
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn';
+  copyBtn.textContent = 'Copy';
+  copyBtn.onclick = function() { copySource(this); };
+  hdr.appendChild(copyBtn);
+
+  card.appendChild(hdr);
 
   const body = document.createElement('div');
   body.className = 'response-body';
-  body.innerHTML = renderMathInText(data.text || '');
+  body.innerHTML = renderMathInText(rawText);
   card.appendChild(body);
 
   feed.appendChild(card);
@@ -379,13 +543,11 @@ function addResponse(data) {
   }
 }
 
-// Отключаем auto-scroll при ручном скролле вверх, включаем при скролле вниз
 feed.addEventListener('scroll', () => {
   const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 100;
   autoScroll = atBottom;
 });
 
-// Обратная совместимость: старый формат с отдельными формулами
 function addFormulaGroup(data) {
   let parsed = data;
   if (typeof data.text === 'string' && data.type === 'formulas') {
@@ -403,6 +565,8 @@ function clearFeed() {
   emptyState.style.display = '';
   responseCount = 0;
   updateCounter();
+  searchInput.value = '';
+  searchBar.classList.remove('visible');
 }
 
 function updateCounter() {

@@ -57,7 +57,7 @@ def main():
     if status.get("paused"):
         return
 
-    input_data = sys.stdin.read()
+    input_data = sys.stdin.buffer.read().decode("utf-8")
     try:
         hook_data = json.loads(input_data)
     except json.JSONDecodeError:
