@@ -193,21 +193,6 @@
   .response-card:hover .copy-btn { opacity: 1; }
   .copy-btn:hover { background: var(--copy-bg-hover); color: var(--text-secondary); }
   .copy-btn.copied { color: #2a9d4e; }
-  .svg-btn {
-    padding: 3px 8px;
-    border: none;
-    border-radius: 4px;
-    background: var(--copy-bg);
-    color: var(--text-dim);
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    opacity: 0;
-    margin-left: 4px;
-  }
-  .response-card:hover .svg-btn { opacity: 1; }
-  .svg-btn:hover { background: var(--copy-bg-hover); color: var(--text-secondary); }
-
   mark { background: rgba(124, 106, 239, 0.3); color: inherit; border-radius: 2px; padding: 0 1px; }
 
   /* Markdown content */
@@ -570,29 +555,6 @@ function copySource(btn) {
   });
 }
 
-function copySvg(btn) {
-  const card = btn.closest('.response-card');
-  const mathEls = card.querySelectorAll('.math-display .katex, .math-inline .katex');
-  if (mathEls.length === 0) {
-    btn.textContent = 'No math';
-    setTimeout(() => { btn.textContent = 'SVG'; }, 1500);
-    return;
-  }
-  const svgParts = [];
-  mathEls.forEach(el => {
-    const svg = el.querySelector('svg');
-    if (svg) svgParts.push(svg.outerHTML);
-  });
-  if (svgParts.length > 0) {
-    navigator.clipboard.writeText(svgParts.join('\n')).then(() => {
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = 'SVG'; }, 1500);
-    }).catch(() => {
-      btn.textContent = 'Failed';
-      setTimeout(() => { btn.textContent = 'SVG'; }, 1500);
-    });
-  }
-}
 
 function addResponse(data) {
   emptyState.style.display = 'none';
@@ -619,11 +581,6 @@ function addResponse(data) {
   copyBtn.onclick = function() { copySource(this); };
   hdr.appendChild(copyBtn);
 
-  const svgBtn = document.createElement('button');
-  svgBtn.className = 'svg-btn';
-  svgBtn.textContent = 'SVG';
-  svgBtn.onclick = function() { copySvg(this); };
-  hdr.appendChild(svgBtn);
 
   card.appendChild(hdr);
 
