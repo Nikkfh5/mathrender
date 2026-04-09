@@ -88,11 +88,34 @@ class TestFormulaEdgeCases(unittest.TestCase):
     """Крайние случаи парсинга."""
 
     def test_formula_in_code_block(self):
-        # Код-блоки обрабатываются фронтендом, хук видит сырой текст
-        # $$...$$ внутри ``` блока — хук его найдёт,
-        # но фронтенд защитит плейсхолдером
+        # $$...$$ inside a fenced code block — should NOT trigger send.
+        # The hook now strips code blocks before scanning.
         text = "```\n$$\\int x dx$$\n```"
-        # Хук НАЙДЁТ это (он не знает про код-блоки), но фронтенд не отрендерит
+        self.assertFalse(has_formulas(text))
+
+    def test_shell_var_in_fenced_code_block(self):
+        # $@ and $1 are shell variables, not LaTeX — should NOT trigger.
+        # This was the original false-positive: Claude writes shell code
+        # blocks containing $@ all the time.
+        text = "```bash\nfunction deploy() {\n    command deploy \"$@\"\n}\n```"
+        self.assertFalse(has_formulas(text))
+
+    def test_shell_var_false_positive_with_surrounding_dollar(self):
+        # The specific pattern that caused MathRender to fire on shell responses:
+        # $@ inside a code block adjacent to another $ in surrounding text.
+        text = (
+            "Use `$HOME` or run:\n\n"
+            "```bash\npython3 hook.py \"$@\"\n```\n\n"
+            "No LaTeX here."
+        )
+        self.assertFalse(has_formulas(text))
+
+    def test_formula_outside_code_block_still_detected(self):
+        # Real LaTeX outside a code block must still be found.
+        text = (
+            "Run `python3 $HOME/script.py` then solve:\n\n"
+            "$$\\int_0^1 x^2 dx = \\frac{1}{3}$$"
+        )
         self.assertTrue(has_formulas(text))
 
     @unittest.skip("Known: \\$100 ловится — Claude использует `$` в коде, не экранирует")

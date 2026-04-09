@@ -14,10 +14,19 @@ MATHRENDER_HEALTH = "http://127.0.0.1:18573/health"
 # Quick check: does the text contain something that looks like LaTeX
 LATEX_QUICK_CHECK = re.compile(r'\$\$.+?\$\$|\$[^$]+\$|\\\[.+?\\\]|\\\(.+?\\\)', re.DOTALL)
 
+# Strip fenced and inline code blocks before scanning to avoid false positives
+# from shell variables ($@, $1, $var) and other non-LaTeX $ usage in code.
+CODE_BLOCK = re.compile(r'```[\s\S]*?```|`[^`]+`')
+
 
 def has_formulas(text: str) -> bool:
-    """Quickly checks if text contains LaTeX formulas."""
-    return bool(LATEX_QUICK_CHECK.search(text))
+    """Quickly checks if text contains LaTeX formulas.
+
+    Code blocks are stripped first to prevent false positives from shell
+    variables such as $@, $1, $var inside fenced code blocks.
+    """
+    clean = CODE_BLOCK.sub('', text)
+    return bool(LATEX_QUICK_CHECK.search(clean))
 
 
 def server_status() -> dict | None:
