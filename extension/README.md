@@ -50,12 +50,15 @@ That's it. The extension **automatically installs** the Claude Code hook on firs
 
 ## Commands
 
+Open with `Ctrl+Shift+P` → type **MathRender**.
+
 | Command | Description |
 |---------|-------------|
 | `MathRender: Show Panel` | Open the formula panel (starts the server) |
 | `MathRender: Enable` | Same as Show Panel |
 | `MathRender: Disable` | Stop server and close panel |
-| `MathRender: Setup Hook` | Reinstall the Claude Code hook (if needed) |
+| `MathRender: Status` | Show server port, hook path, history count, and pause state |
+| `MathRender: Send Test Formula` | Inject a test formula into the panel — verify setup without Claude |
 
 ## Panel Controls
 
@@ -66,6 +69,17 @@ That's it. The extension **automatically installs** the Claude Code hook on firs
 | **Resume** | Resume capturing |
 | **Clear** | Clear session history |
 | **Copy** | Copy raw source (appears on hover) |
+
+## Settings
+
+Open with `Ctrl+,` → search **MathRender**.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `mathrender.port` | `18573` | Port for the local HTTP server. Change if 18573 is already in use. Reopen the panel after changing. |
+| `mathrender.macros` | `{}` | Custom KaTeX macros merged with built-ins. Example: `{"\\vec": "\\mathbf{#1}"}` |
+
+Built-in macros: `\R` `\N` `\Z` `\C` `\Q` (number sets).
 
 ## Supported LaTeX Syntax
 

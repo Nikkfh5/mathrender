@@ -44,7 +44,7 @@ cd extension
 npm install
 npm run compile
 npx @vscode/vsce package
-code --install-extension mathrender-0.1.0.vsix
+code --install-extension mathrender-*.vsix
 ```
 
 ## Usage
@@ -53,6 +53,8 @@ In VS Code, open Command Palette (`Ctrl+Shift+P`) and run:
 
 - **MathRender: Show Panel** — open the formula panel (also starts the server)
 - **MathRender: Disable** — stop everything
+- **MathRender: Status** — show server port, hook path, history size, and pause state
+- **MathRender: Send Test Formula** — inject a test formula to verify the setup without Claude
 
 MathRender is **off by default**. Open the panel when you need it. It stays active until you disable it or close VS Code.
 
