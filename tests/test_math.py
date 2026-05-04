@@ -127,6 +127,21 @@ class TestFormulaEdgeCases(unittest.TestCase):
         )
         self.assertTrue(has_formulas(text))
 
+    def test_shell_var_in_indented_code_block(self):
+        # 4-space-indented code block with shell variable — should NOT trigger.
+        text = "Run this:\n\n    deploy \"$@\"\n    echo $HOME\n\nNo LaTeX here."
+        self.assertFalse(has_formulas(text))
+
+    def test_shell_var_in_tab_indented_code_block(self):
+        # Tab-indented code block with shell variable — should NOT trigger.
+        text = "Run this:\n\n\tdeploy \"$@\"\n\nNo LaTeX here."
+        self.assertFalse(has_formulas(text))
+
+    def test_formula_outside_indented_code_block(self):
+        # LaTeX outside an indented block must still be detected.
+        text = "Example:\n\n    deploy \"$@\"\n\nSolve: $$\\int_0^1 x dx$$"
+        self.assertTrue(has_formulas(text))
+
     @unittest.skip("Known: \\$100 ловится — Claude использует `$` в коде, не экранирует")
     def test_escaped_dollar(self):
         text = "Стоимость \\$100 и \\$200"

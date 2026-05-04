@@ -14,12 +14,15 @@ MATHRENDER_HEALTH = "http://127.0.0.1:18573/health"
 # Quick check: does the text contain something that looks like LaTeX
 LATEX_QUICK_CHECK = re.compile(r'\$\$.+?\$\$|\$[^$]+\$|\\\[.+?\\\]|\\\(.+?\\\)', re.DOTALL)
 
-# Strip fenced and inline code blocks before scanning to avoid false positives
-# from shell variables ($@, $1, $var) and other non-LaTeX $ usage in code.
-# Side-effect: LaTeX inside a code block (e.g. ```$$x^2$$```) is also ignored —
-# intentional, since the frontend already guards those with a placeholder.
-# Limitation: 4-space-indented code blocks are not stripped (rare in practice).
-CODE_BLOCK = re.compile(r'```[\s\S]*?```|`[^`]+`')
+# Strip fenced, inline, and indented code blocks before scanning to avoid
+# false positives from shell variables ($@, $1, $var) in code.
+# Side-effect: LaTeX inside a code block is also ignored — intentional,
+# since the frontend already guards those with a placeholder.
+CODE_BLOCK = re.compile(
+    r'```[\s\S]*?```'                               # fenced blocks
+    r'|`[^`]+`'                                     # inline code
+    r'|(?<=\n\n)(?:    |\t).+(?:\n(?:    |\t).+)*' # indented blocks (blank line required per Markdown spec)
+)
 
 
 def has_formulas(text: str) -> bool:
