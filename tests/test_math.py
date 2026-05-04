@@ -118,6 +118,15 @@ class TestFormulaEdgeCases(unittest.TestCase):
         )
         self.assertTrue(has_formulas(text))
 
+    def test_formula_inside_and_outside_code_block(self):
+        # LaTeX outside is detected even when there's also LaTeX inside a code block.
+        # The formula inside is ignored (intentional false-negative); the one outside is found.
+        text = (
+            "```python\n# $$x^2$$ is just a docstring example\n```\n\n"
+            "But the real formula: $$\\int_0^1 x dx$$"
+        )
+        self.assertTrue(has_formulas(text))
+
     @unittest.skip("Known: \\$100 ловится — Claude использует `$` в коде, не экранирует")
     def test_escaped_dollar(self):
         text = "Стоимость \\$100 и \\$200"

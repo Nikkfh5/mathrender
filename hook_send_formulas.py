@@ -16,6 +16,9 @@ LATEX_QUICK_CHECK = re.compile(r'\$\$.+?\$\$|\$[^$]+\$|\\\[.+?\\\]|\\\(.+?\\\)',
 
 # Strip fenced and inline code blocks before scanning to avoid false positives
 # from shell variables ($@, $1, $var) and other non-LaTeX $ usage in code.
+# Side-effect: LaTeX inside a code block (e.g. ```$$x^2$$```) is also ignored —
+# intentional, since the frontend already guards those with a placeholder.
+# Limitation: 4-space-indented code blocks are not stripped (rare in practice).
 CODE_BLOCK = re.compile(r'```[\s\S]*?```|`[^`]+`')
 
 
