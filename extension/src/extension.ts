@@ -76,13 +76,22 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
             hooks.Stop = [];
         }
 
-        const alreadyInstalled = hooks.Stop.some((entry: any) =>
-            entry?.hooks?.some((h: any) =>
-                typeof h?.command === 'string' && h.command.includes('hook_send_formulas')
-            )
-        );
+        // Find existing hook entry and check if path needs updating
+        let found = false;
+        let updated = false;
+        for (const entry of hooks.Stop as any[]) {
+            for (const h of entry?.hooks || []) {
+                if (typeof h?.command === 'string' && h.command.includes('hook_send_formulas')) {
+                    found = true;
+                    if (h.command !== hookCmd) {
+                        h.command = hookCmd;
+                        updated = true;
+                    }
+                }
+            }
+        }
 
-        if (!alreadyInstalled) {
+        if (!found) {
             hooks.Stop.push({
                 hooks: [{
                     type: 'command',
@@ -91,8 +100,14 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
                     async: true,
                 }]
             });
+            updated = true;
+        }
+
+        if (updated) {
             fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
-            vscode.window.showInformationMessage('MathRender: Hook installed for Claude Code');
+            vscode.window.showInformationMessage(
+                found ? 'MathRender: Hook path updated' : 'MathRender: Hook installed for Claude Code'
+            );
         }
     } catch (err) {
         console.error('[MathRender] Hook install error:', err);

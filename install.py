@@ -7,15 +7,30 @@ import sys
 from pathlib import Path
 
 DIR = Path(__file__).parent.resolve()
+HOOK_DIR = Path.home() / ".mathrender"
+HOOK_FILE = HOOK_DIR / "hook_send_formulas.py"
 
 
 def get_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
+def copy_hook() -> None:
+    """Copy hook script to ~/.mathrender/ so it survives repo moves."""
+    HOOK_DIR.mkdir(parents=True, exist_ok=True)
+    src = DIR / "hook_send_formulas.py"
+    if not src.exists():
+        print(f"Error: {src} not found")
+        sys.exit(1)
+    if not HOOK_FILE.exists() or src.read_bytes() != HOOK_FILE.read_bytes():
+        HOOK_FILE.write_bytes(src.read_bytes())
+        print(f"[OK] Hook copied to {HOOK_FILE}")
+    else:
+        print(f"[OK] Hook already up to date in {HOOK_FILE}")
+
+
 def get_hook_command() -> str:
-    hook_script = DIR / "hook_send_formulas.py"
-    hook_path = str(hook_script).replace("\\", "/")
+    hook_path = str(HOOK_FILE).replace("\\", "/")
     if platform.system() == "Windows":
         return f'python "{hook_path}"'
     else:
@@ -30,6 +45,9 @@ def install():
 
     # Check Python
     print(f"[OK] Python {sys.version.split()[0]}")
+
+    # Copy hook to stable location
+    copy_hook()
 
     # Check settings
     settings_path = get_settings_path()
@@ -64,14 +82,22 @@ def install():
     if "Stop" not in settings["hooks"]:
         settings["hooks"]["Stop"] = []
 
-    existing = [
-        h for entry in settings["hooks"]["Stop"]
-        for h in entry.get("hooks", [])
-        if "hook_send_formulas" in h.get("command", "")
-    ]
-    if not existing:
+    # Find existing hook and update path if needed
+    found = False
+    updated = False
+    for entry in settings["hooks"]["Stop"]:
+        for h in entry.get("hooks", []):
+            if "hook_send_formulas" in h.get("command", ""):
+                found = True
+                if h["command"] != hook_cmd:
+                    h["command"] = hook_cmd
+                    updated = True
+
+    if not found:
         settings["hooks"]["Stop"].append(hook_entry)
         print("[OK] Stop hook added to settings.json")
+    elif updated:
+        print("[OK] Stop hook path updated")
     else:
         print("[OK] Stop hook already installed")
 
