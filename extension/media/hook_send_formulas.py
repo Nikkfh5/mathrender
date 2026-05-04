@@ -2,22 +2,39 @@
 """Hook for Claude Code: sends responses with LaTeX formulas to MathRender VS Code extension."""
 
 import json
+import os
 import re
 import sys
 import time
 import urllib.request
 import urllib.error
 
-MATHRENDER_URL = "http://127.0.0.1:18573/response"
-MATHRENDER_HEALTH = "http://127.0.0.1:18573/health"
+_PORT = int(os.environ.get('MATHRENDER_PORT', '18573'))
+MATHRENDER_URL = f"http://127.0.0.1:{_PORT}/response"
+MATHRENDER_HEALTH = f"http://127.0.0.1:{_PORT}/health"
 
 # Quick check: does the text contain something that looks like LaTeX
 LATEX_QUICK_CHECK = re.compile(r'\$\$.+?\$\$|\$[^$]+\$|\\\[.+?\\\]|\\\(.+?\\\)', re.DOTALL)
 
+# Strip fenced, inline, and indented code blocks before scanning to avoid
+# false positives from shell variables ($@, $1, $var) in code.
+# Side-effect: LaTeX inside a code block is also ignored — intentional,
+# since the frontend already guards those with a placeholder.
+CODE_BLOCK = re.compile(
+    r'```[\s\S]*?```'                               # fenced blocks
+    r'|`[^`]+`'                                     # inline code
+    r'|(?<=\n\n)(?:    |\t).+(?:\n(?:    |\t).+)*' # indented blocks (blank line required per Markdown spec)
+)
+
 
 def has_formulas(text: str) -> bool:
-    """Quickly checks if text contains LaTeX formulas."""
-    return bool(LATEX_QUICK_CHECK.search(text))
+    """Quickly checks if text contains LaTeX formulas.
+
+    Code blocks are stripped first to prevent false positives from shell
+    variables such as $@, $1, $var inside fenced code blocks.
+    """
+    clean = CODE_BLOCK.sub('', text)
+    return bool(LATEX_QUICK_CHECK.search(clean))
 
 
 def server_status() -> dict | None:
@@ -25,7 +42,7 @@ def server_status() -> dict | None:
     try:
         with urllib.request.urlopen(MATHRENDER_HEALTH, timeout=1) as resp:
             return json.loads(resp.read())
-    except (urllib.error.URLError, OSError):
+    except (urllib.error.URLError, OSError, json.JSONDecodeError):
         return None
 
 

@@ -15,15 +15,28 @@ def get_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
+def _set_permissions() -> None:
+    """Restrict ~/.mathrender/ to owner-only on Unix."""
+    if platform.system() != "Windows":
+        try:
+            HOOK_DIR.chmod(0o700)
+            if HOOK_FILE.exists():
+                HOOK_FILE.chmod(0o600)
+        except OSError:
+            pass
+
+
 def copy_hook() -> None:
     """Copy hook script to ~/.mathrender/ so it survives repo moves."""
     HOOK_DIR.mkdir(parents=True, exist_ok=True)
+    _set_permissions()
     src = DIR / "hook_send_formulas.py"
     if not src.exists():
         print(f"Error: {src} not found")
         sys.exit(1)
     if not HOOK_FILE.exists() or src.read_bytes() != HOOK_FILE.read_bytes():
         HOOK_FILE.write_bytes(src.read_bytes())
+        _set_permissions()
         print(f"[OK] Hook copied to {HOOK_FILE}")
     else:
         print(f"[OK] Hook already up to date in {HOOK_FILE}")
@@ -116,7 +129,7 @@ def install():
     print()
     print("  2. Package and install:")
     print("     npx @vscode/vsce package")
-    print("     code --install-extension mathrender-0.1.0.vsix")
+    print("     code --install-extension mathrender-*.vsix")
     print()
     print("  3. In VS Code: Ctrl+Shift+P -> 'MathRender: Show Panel'")
 

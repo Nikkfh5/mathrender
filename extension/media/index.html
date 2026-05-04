@@ -345,6 +345,12 @@ let responseCount = 0;
 let autoScroll = true;
 let paused = false;
 
+const DEFAULT_MACROS = {
+  "\\R": "\\mathbb{R}", "\\N": "\\mathbb{N}",
+  "\\Z": "\\mathbb{Z}", "\\C": "\\mathbb{C}", "\\Q": "\\mathbb{Q}",
+};
+let userMacros = {};
+
 // Store raw text for search + copy
 const cardData = new WeakMap();
 
@@ -417,10 +423,7 @@ function renderKatex(latex, displayMode) {
       throwOnError: false,
       strict: 'warn',
       trust: false,
-      macros: {
-        "\\R": "\\mathbb{R}", "\\N": "\\mathbb{N}",
-        "\\Z": "\\mathbb{Z}", "\\C": "\\mathbb{C}", "\\Q": "\\mathbb{Q}",
-      }
+      macros: { ...DEFAULT_MACROS, ...userMacros },
     });
     if (displayMode) {
       return `<div class="math-display">${html}</div>`;
@@ -658,6 +661,9 @@ window.addEventListener('message', event => {
     case 'paused':
       paused = data.paused;
       updatePauseUI(paused);
+      break;
+    case 'config':
+      if (data.macros) userMacros = data.macros;
       break;
   }
 });

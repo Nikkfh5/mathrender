@@ -5,6 +5,7 @@ import io
 import json
 import sys
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -152,6 +153,54 @@ class TestPauseCheck(unittest.TestCase):
             hook_send_formulas.main()
 
         self.assertEqual(len(sent), 0)
+
+
+class TestSendResponse(unittest.TestCase):
+    """Tests for send_response resilience."""
+
+    def test_send_response_ignores_http_500(self):
+        """Server returning 500 is silently ignored."""
+        err = urllib.error.HTTPError(
+            url='http://127.0.0.1:18573/response',
+            code=500, msg='Internal Server Error', hdrs=None, fp=None,
+        )
+        with patch('urllib.request.urlopen', side_effect=err):
+            hook_send_formulas.send_response("$$x^2$$")  # must not raise
+
+    def test_send_response_ignores_http_400(self):
+        """Server returning 400 is silently ignored."""
+        err = urllib.error.HTTPError(
+            url='http://127.0.0.1:18573/response',
+            code=400, msg='Bad Request', hdrs=None, fp=None,
+        )
+        with patch('urllib.request.urlopen', side_effect=err):
+            hook_send_formulas.send_response("$$x^2$$")
+
+    def test_send_response_ignores_connection_refused(self):
+        """Connection refused is silently ignored."""
+        err = urllib.error.URLError('Connection refused')
+        with patch('urllib.request.urlopen', side_effect=err):
+            hook_send_formulas.send_response("$$x^2$$")
+
+
+class TestServerStatus(unittest.TestCase):
+    """Tests for server_status resilience."""
+
+    def test_server_status_returns_none_on_invalid_json(self):
+        """Malformed JSON from /health returns None instead of crashing."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'not-valid-json{'
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch('urllib.request.urlopen', return_value=mock_resp):
+            result = hook_send_formulas.server_status()
+        self.assertIsNone(result)
+
+    def test_server_status_returns_none_on_url_error(self):
+        """URLError (server down) returns None."""
+        with patch('urllib.request.urlopen', side_effect=urllib.error.URLError('down')):
+            result = hook_send_formulas.server_status()
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

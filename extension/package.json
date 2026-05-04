@@ -80,8 +80,38 @@
         "command": "mathrender.off",
         "title": "Disable",
         "category": "MathRender"
+      },
+      {
+        "command": "mathrender.status",
+        "title": "Status",
+        "category": "MathRender"
+      },
+      {
+        "command": "mathrender.sendTest",
+        "title": "Send Test Formula",
+        "category": "MathRender"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "MathRender",
+      "properties": {
+        "mathrender.port": {
+          "type": "integer",
+          "default": 18573,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Port for the local MathRender HTTP server. Requires reopening the panel after change."
+        },
+        "mathrender.macros": {
+          "type": "object",
+          "default": {},
+          "description": "Custom KaTeX macros merged with built-in ones (\\R, \\N, \\Z, \\C, \\Q). Example: {\"\\\\vec\": \"\\\\mathbf{#1}\"}",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

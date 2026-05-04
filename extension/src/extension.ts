@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 const HOST = '127.0.0.1';
-const PORT = 18573;
+let PORT = 18573; // overridden from mathrender.port setting in activate()
 const MAX_BODY = 1024 * 1024; // 1 MB
 const MAX_HISTORY = 500;
 const PAGE_SIZE = 50;
@@ -33,6 +33,26 @@ let paused = false;
 let unreadCount = 0;
 let sidebarView: vscode.TreeView<string> | undefined;
 
+// --- Helpers ---
+
+function atomicWrite(filePath: string, content: string): void {
+    const tmp = filePath + '.tmp';
+    fs.writeFileSync(tmp, content, 'utf-8');
+    fs.renameSync(tmp, filePath);
+}
+
+function setRestrictivePerms(filePath: string): void {
+    if (process.platform !== 'win32') {
+        try { fs.chmodSync(filePath, 0o600); } catch { /* ignore */ }
+    }
+}
+
+function setRestrictiveDirPerms(dirPath: string): void {
+    if (process.platform !== 'win32') {
+        try { fs.chmodSync(dirPath, 0o700); } catch { /* ignore */ }
+    }
+}
+
 // --- Hook auto-install ---
 
 function ensureHookInstalled(extensionUri: vscode.Uri): void {
@@ -40,12 +60,14 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
         if (!fs.existsSync(HOOK_DIR)) {
             fs.mkdirSync(HOOK_DIR, { recursive: true });
         }
+        setRestrictiveDirPerms(HOOK_DIR);
         const srcHook = path.join(extensionUri.fsPath, 'media', 'hook_send_formulas.py');
         if (fs.existsSync(srcHook)) {
             const srcContent = fs.readFileSync(srcHook);
             const dstExists = fs.existsSync(HOOK_FILE);
             if (!dstExists || !srcContent.equals(fs.readFileSync(HOOK_FILE))) {
                 fs.copyFileSync(srcHook, HOOK_FILE);
+                setRestrictivePerms(HOOK_FILE);
             }
         }
 
@@ -104,7 +126,7 @@ function ensureHookInstalled(extensionUri: vscode.Uri): void {
         }
 
         if (updated) {
-            fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+            atomicWrite(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n');
             vscode.window.showInformationMessage(
                 found ? 'MathRender: Hook path updated' : 'MathRender: Hook installed for Claude Code'
             );
@@ -134,8 +156,10 @@ function saveHistory(): void {
     try {
         if (!fs.existsSync(HOOK_DIR)) {
             fs.mkdirSync(HOOK_DIR, { recursive: true });
+            setRestrictiveDirPerms(HOOK_DIR);
         }
-        fs.writeFileSync(HISTORY_FILE, JSON.stringify(history), 'utf-8');
+        atomicWrite(HISTORY_FILE, JSON.stringify(history));
+        setRestrictivePerms(HISTORY_FILE);
     } catch (err) {
         console.error('[MathRender] Failed to save history:', err);
     }
@@ -357,6 +381,12 @@ function showPanel(context: vscode.ExtensionContext): void {
 
     panel.webview.html = getWebviewHtml(context.extensionUri);
 
+    // Send user-defined KaTeX macros to webview
+    const macros = vscode.workspace.getConfiguration('mathrender').get<Record<string, string>>('macros', {});
+    if (Object.keys(macros).length > 0) {
+        panel.webview.postMessage({ type: 'config', macros });
+    }
+
     if (history.length > 0) {
         for (let i = 0; i < history.length; i += PAGE_SIZE) {
             const page = history.slice(i, i + PAGE_SIZE);
@@ -435,6 +465,8 @@ function stopAll(): void {
 // --- Activation ---
 
 export function activate(context: vscode.ExtensionContext): void {
+    PORT = vscode.workspace.getConfiguration('mathrender').get<number>('port', 18573);
+
     ensureHookInstalled(context.extensionUri);
     loadHistory();
 
@@ -452,6 +484,28 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('mathrender.show', () => showPanel(context)),
         vscode.commands.registerCommand('mathrender.on', () => showPanel(context)),
         vscode.commands.registerCommand('mathrender.off', () => stopAll()),
+        vscode.commands.registerCommand('mathrender.status', () => {
+            const parts = [
+                `Server: ${server ? `running on port ${PORT}` : 'stopped'}`,
+                `Hook: ${fs.existsSync(HOOK_FILE) ? HOOK_FILE : 'not found'}`,
+                `History: ${history.length}/${MAX_HISTORY} entries`,
+                `State: ${paused ? 'paused' : 'active'}`,
+            ];
+            vscode.window.showInformationMessage(parts.join('  |  '));
+        }),
+        vscode.commands.registerCommand('mathrender.sendTest', () => {
+            if (!server) {
+                showPanel(context);
+            }
+            const entry: HistoryEntry = {
+                type: 'response',
+                text: 'Test: $$E = mc^2$$ and $$\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}$$',
+                timestamp: new Date().toLocaleTimeString(),
+            };
+            addToHistory(entry);
+            panel?.webview.postMessage(entry);
+            saveHistory();
+        }),
     );
 }
 
