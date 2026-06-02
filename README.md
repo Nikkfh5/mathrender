@@ -1,45 +1,64 @@
 # MathRender
 
-Renders LaTeX formulas from Claude Code in a VS Code panel. Instead of reading raw `$$\int_0^1 x^2 dx$$` in the terminal, you see beautifully rendered math in real time.
+Renders LaTeX formulas from AI coding agent responses in a VS Code panel. Instead of reading raw `$$\int_0^1 x^2 dx$$` in the terminal, you see rendered math in real time.
 
-## How it works
+Supported agents:
+
+- Codex
+- Claude Code
+
+## How It Works
 
 ```
-Claude Code responds with formulas
+Codex or Claude Code responds with formulas
         |
-    Hook fires (Stop event)
+    Agent Stop hook runs
         |
-    Parses LaTeX from response
+    Python hook detects LaTeX outside code blocks
         |
-    Sends to VS Code extension (localhost HTTP)
+    HTTP POST to the VS Code extension
         |
     WebView panel renders markdown + KaTeX
 ```
 
-- Full response rendering: text + formulas together, like a textbook
-- Zero config: open the panel and it just works
-- Zero dependencies: Python 3 stdlib for the hook, KaTeX from CDN
-- Session history: scroll back through all responses
-- Pause/resume: temporarily stop capturing without closing the panel
+The extension owns the local HTTP server and rendering UI. Agent hooks are small adapters that send assistant responses to `http://127.0.0.1:18573/response`.
+
+## Features
+
+- Full response rendering: text and formulas together
+- Automatic hook installation for Codex and Claude Code
+- Python stdlib hook, no Python package dependencies
+- Session history and search
+- Pause/resume capture without closing the panel
+- Test formula command independent of either agent
 
 ## Requirements
 
-- **Windows** (also works on macOS/Linux)
+- VS Code 1.85+
 - Python 3.10+
-- Claude Code CLI or VS Code extension
-- VS Code
+- Codex and/or Claude Code
 
 ## Install
 
-### 1. Add the hook to Claude Code
+### Marketplace
+
+Install MathRender from the VS Code Marketplace, then run:
+
+```
+MathRender: Show Panel
+```
+
+On activation, MathRender copies the hook to `~/.mathrender/hook_send_formulas.py` and installs:
+
+- Codex hook config in `~/.codex/hooks.json`
+- Claude Code hook config in `~/.claude/settings.json`
+
+Codex may require you to trust new or changed hooks through `/hooks` before it runs them. MathRender installs the hook definition automatically, but Codex owns that security gate.
+
+### From Source
 
 ```bash
 python install.py
-```
-
-### 2. Build and install the VS Code extension
-
-```bash
 cd extension
 npm install
 npm run compile
@@ -51,52 +70,45 @@ code --install-extension mathrender-*.vsix
 
 In VS Code, open Command Palette (`Ctrl+Shift+P`) and run:
 
-- **MathRender: Show Panel** — open the formula panel (also starts the server)
-- **MathRender: Disable** — stop everything
-- **MathRender: Status** — show server port, hook path, history size, and pause state
-- **MathRender: Send Test Formula** — inject a test formula to verify the setup without Claude
+- **MathRender: Show Panel** - open the formula panel and start the server
+- **MathRender: Disable** - stop the server and close the panel
+- **MathRender: Status** - show server, hook, history, and pause state
+- **MathRender: Send Test Formula** - inject a test formula without Codex or Claude
 
-MathRender is **off by default**. Open the panel when you need it. It stays active until you disable it or close VS Code.
+MathRender is off by default. Open the panel when you need it.
 
-## Uninstall
-
-```bash
-python uninstall.py
-code --uninstall-extension mathrender.mathrender
-```
-
-## Project structure
+## Project Structure
 
 ```
-extension/              VS Code extension (TypeScript)
-  src/extension.ts      HTTP server + WebView + commands
+extension/              VS Code extension
+  src/extension.ts      HTTP server, WebView, commands, hook installers
   media/index.html      Frontend: markdown + KaTeX rendering
-  package.json          Extension manifest
-hook_send_formulas.py   Claude Code Stop hook
-install.py              Hook installer
-uninstall.py            Hook uninstaller
-tests/                  Test suite
+  media/hook_send_formulas.py
+hook_send_formulas.py   Shared Codex/Claude hook
+install.py              Manual hook installer
+uninstall.py            Manual hook uninstaller
+tests/                  Python hook tests
 ```
 
-## How the hook works
+## Running Tests
 
-The hook is configured as an async Stop event in Claude Code. On each response:
-
-1. Python checks if the MathRender server is running (HTTP health check)
-2. If running and not paused, checks if the response contains LaTeX (`$$...$$`, `$...$`, `\[...\]`, `\(...\)`)
-3. If formulas found, sends the full response text to the VS Code extension
-4. Extension pushes it to the WebView panel via postMessage
-5. WebView renders markdown with KaTeX
-
-## Running tests
+Disable external pytest plugin autoload on machines with unrelated global pytest plugins:
 
 ```bash
-python -m pytest tests/ -v
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -v
+cd extension && npm run compile
+```
+
+On PowerShell:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; python -m pytest tests/ -v
+cd extension; npm run compile
 ```
 
 ## Disclaimer
 
-This is an independent community project. It is not affiliated with, endorsed by, or officially connected to [Anthropic](https://anthropic.com) in any way. Claude Code is a product of Anthropic.
+This is an independent community project. It is not affiliated with, endorsed by, or officially connected to OpenAI, Anthropic, or the Codex/Claude Code teams.
 
 ## License
 

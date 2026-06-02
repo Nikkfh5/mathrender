@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hook for Claude Code: sends responses with LaTeX formulas to MathRender VS Code extension."""
+"""Agent hook: sends responses with LaTeX formulas to MathRender VS Code extension."""
 
 import json
 import os
@@ -35,6 +35,19 @@ def has_formulas(text: str) -> bool:
     """
     clean = CODE_BLOCK.sub('', text)
     return bool(LATEX_QUICK_CHECK.search(clean))
+
+
+def extract_response_text(hook_data) -> str:
+    """Extract assistant text from supported agent hook payloads."""
+    if not isinstance(hook_data, dict):
+        return ""
+
+    for field in ("last_assistant_message", "text"):
+        value = hook_data.get(field)
+        if isinstance(value, str):
+            return value
+
+    return ""
 
 
 def server_status() -> dict | None:
@@ -80,7 +93,7 @@ def main():
     except json.JSONDecodeError:
         return
 
-    text = hook_data.get("last_assistant_message", "")
+    text = extract_response_text(hook_data)
     if text and has_formulas(text):
         send_response(text)
 

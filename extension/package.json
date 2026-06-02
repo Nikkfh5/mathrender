@@ -1,8 +1,8 @@
 {
   "name": "mathrender",
-  "displayName": "MathRender — LaTeX Formula Renderer for Claude Code",
-  "description": "Renders LaTeX formulas from Claude Code responses in a beautiful VS Code side panel with KaTeX. See math as it's meant to be seen.",
-  "version": "0.7.1",
+  "displayName": "MathRender - LaTeX Formula Renderer for AI Coding Agents",
+  "description": "Renders LaTeX formulas from Codex and Claude Code responses in a VS Code side panel with KaTeX. See math as it's meant to be seen.",
+  "version": "0.8.0",
   "publisher": "Nikkfh5",
   "author": {
     "name": "Nikkfh5",
@@ -30,6 +30,8 @@
     "math",
     "formula",
     "katex",
+    "codex",
+    "openai",
     "claude",
     "claude-code",
     "render",
@@ -62,7 +64,7 @@
     "viewsWelcome": [
       {
         "view": "mathrender.sidebar",
-        "contents": "Render LaTeX formulas from Claude Code.\n[$(play) Open Panel](command:mathrender.show)"
+        "contents": "Render LaTeX formulas from Codex and Claude Code.\n[$(play) Open Panel](command:mathrender.show)"
       }
     ],
     "commands": [

@@ -3,3 +3,5 @@ tsconfig.json
 node_modules/**
 *.vsix
 media/icon.svg
+**/__pycache__/**
+**/*.pyc

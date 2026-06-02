@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for Claude Code hook."""
+"""Tests for supported agent hooks."""
 
 import io
 import json
@@ -21,7 +21,7 @@ def make_stdin_mock(data: str):
 
 
 class TestHookInputParsing(unittest.TestCase):
-    """Tests for parsing input data from Claude Code."""
+    """Tests for parsing input data from supported agent hooks."""
 
     def _run_hook(self, input_data: str) -> str | None:
         """Runs main() with mocked stdin and captures send_response calls."""
@@ -47,6 +47,42 @@ class TestHookInputParsing(unittest.TestCase):
         result = self._run_hook(data)
         self.assertIsNotNone(result)
         self.assertIn("\\int", result)
+
+    def test_codex_stop_format(self):
+        """Codex Stop hook format."""
+        data = json.dumps({
+            "session_id": "abc-123",
+            "turn_id": "turn-456",
+            "hook_event_name": "Stop",
+            "stop_hook_active": False,
+            "last_assistant_message": "Codex formula: $$E = mc^2$$",
+        })
+        result = self._run_hook(data)
+        self.assertEqual(result, "Codex formula: $$E = mc^2$$")
+
+    def test_extract_response_text_from_last_assistant_message(self):
+        """Shared helper reads Claude/Codex assistant messages."""
+        text = hook_send_formulas.extract_response_text({
+            "hook_event_name": "Stop",
+            "last_assistant_message": "Formula: $$x^2$$",
+        })
+        self.assertEqual(text, "Formula: $$x^2$$")
+
+    def test_extract_response_text_from_text_fallback(self):
+        """Shared helper accepts direct text payloads."""
+        text = hook_send_formulas.extract_response_text({
+            "source": "manual",
+            "text": "Formula: $$\\alpha$$",
+        })
+        self.assertEqual(text, "Formula: $$\\alpha$$")
+
+    def test_extract_response_text_ignores_non_string_fields(self):
+        """Non-string payload fields are ignored."""
+        text = hook_send_formulas.extract_response_text({
+            "last_assistant_message": None,
+            "text": ["$$x$$"],
+        })
+        self.assertEqual(text, "")
 
     def test_no_formulas_no_send(self):
         """No formulas — doesn't send."""

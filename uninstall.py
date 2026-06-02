@@ -1,49 +1,69 @@
 #!/usr/bin/env python3
-"""MathRender — cross-platform uninstaller for Claude Code hooks."""
+"""MathRender — cross-platform uninstaller for agent hooks."""
 
 import json
-import sys
 from pathlib import Path
 
+CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
+CODEX_HOOKS = Path.home() / ".codex" / "hooks.json"
 
-def uninstall():
-    print("MathRender — uninstallation")
 
-    settings_path = Path.home() / ".claude" / "settings.json"
-    if not settings_path.exists():
-        print("No settings.json found, nothing to uninstall.")
-        return
+def remove_mathrender_hooks(path: Path) -> bool:
+    if not path.exists():
+        print(f"[OK] {path} not found")
+        return False
 
-    with open(settings_path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         settings = json.load(f)
+    if not isinstance(settings, dict):
+        print(f"[OK] {path} does not contain a settings object")
+        return False
 
     changed = False
     for event in ("Stop", "SessionEnd"):
-        if "hooks" in settings and event in settings["hooks"]:
+        if isinstance(settings.get("hooks"), dict) and isinstance(settings["hooks"].get(event), list):
             before = len(settings["hooks"][event])
             settings["hooks"][event] = [
                 entry for entry in settings["hooks"][event]
-                if not any(
-                    "mathrender" in h.get("command", "") or
-                    "hook_send_formulas" in h.get("command", "")
-                    for h in entry.get("hooks", [])
-                )
+                if not entry_has_mathrender_hook(entry)
             ]
             if len(settings["hooks"][event]) < before:
                 changed = True
             if not settings["hooks"][event]:
                 del settings["hooks"][event]
 
-    if "hooks" in settings and not settings["hooks"]:
+    if isinstance(settings.get("hooks"), dict) and not settings["hooks"]:
         del settings["hooks"]
 
     if changed:
-        with open(settings_path, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
             f.write("\n")
-        print("[OK] Hooks removed from settings.json")
+        print(f"[OK] Hooks removed from {path}")
     else:
-        print("No MathRender hooks found in settings.json")
+        print(f"[OK] No MathRender hooks found in {path}")
+
+    return changed
+
+
+def entry_has_mathrender_hook(entry) -> bool:
+    if not isinstance(entry, dict) or not isinstance(entry.get("hooks"), list):
+        return False
+
+    for hook in entry["hooks"]:
+        if not isinstance(hook, dict):
+            continue
+        command = hook.get("command", "")
+        if isinstance(command, str) and ("mathrender" in command or "hook_send_formulas" in command):
+            return True
+    return False
+
+
+def uninstall():
+    print("MathRender — uninstallation")
+
+    remove_mathrender_hooks(CLAUDE_SETTINGS)
+    remove_mathrender_hooks(CODEX_HOOKS)
 
     print()
     print("To uninstall the VS Code extension:")

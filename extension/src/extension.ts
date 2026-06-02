@@ -13,6 +13,7 @@ const HOOK_DIR = path.join(os.homedir(), '.mathrender');
 const HOOK_FILE = path.join(HOOK_DIR, 'hook_send_formulas.py');
 const HISTORY_FILE = path.join(HOOK_DIR, 'history.json');
 const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
+const CODEX_HOOKS = path.join(os.homedir(), '.codex', 'hooks.json');
 
 interface HistoryEntry {
     type: string;
@@ -55,81 +56,154 @@ function setRestrictiveDirPerms(dirPath: string): void {
 
 // --- Hook auto-install ---
 
-function ensureHookInstalled(extensionUri: vscode.Uri): void {
+function copyBundledHook(extensionUri: vscode.Uri): void {
+    if (!fs.existsSync(HOOK_DIR)) {
+        fs.mkdirSync(HOOK_DIR, { recursive: true });
+    }
+    setRestrictiveDirPerms(HOOK_DIR);
+
+    const srcHook = path.join(extensionUri.fsPath, 'media', 'hook_send_formulas.py');
+    if (!fs.existsSync(srcHook)) {
+        return;
+    }
+
+    const srcContent = fs.readFileSync(srcHook);
+    const dstExists = fs.existsSync(HOOK_FILE);
+    if (!dstExists || !srcContent.equals(fs.readFileSync(HOOK_FILE))) {
+        fs.copyFileSync(srcHook, HOOK_FILE);
+        setRestrictivePerms(HOOK_FILE);
+    }
+}
+
+function getHookCommand(): string {
+    const hookPath = HOOK_FILE.replace(/\\/g, '/');
+    return process.platform === 'win32'
+        ? `python "${hookPath}"`
+        : `python3 "${hookPath}"`;
+}
+
+function readJsonObject(filePath: string): Record<string, any> | undefined {
+    if (!fs.existsSync(filePath)) {
+        return {};
+    }
+
     try {
-        if (!fs.existsSync(HOOK_DIR)) {
-            fs.mkdirSync(HOOK_DIR, { recursive: true });
-        }
-        setRestrictiveDirPerms(HOOK_DIR);
-        const srcHook = path.join(extensionUri.fsPath, 'media', 'hook_send_formulas.py');
-        if (fs.existsSync(srcHook)) {
-            const srcContent = fs.readFileSync(srcHook);
-            const dstExists = fs.existsSync(HOOK_FILE);
-            if (!dstExists || !srcContent.equals(fs.readFileSync(HOOK_FILE))) {
-                fs.copyFileSync(srcHook, HOOK_FILE);
-                setRestrictivePerms(HOOK_FILE);
-            }
-        }
+        const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+        return undefined;
+    }
+}
 
-        if (!fs.existsSync(CLAUDE_SETTINGS)) {
-            return;
-        }
+function ensureStopHook(settings: Record<string, any>, hook: Record<string, any>): boolean {
+    if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) {
+        settings.hooks = {};
+    }
 
-        const raw = fs.readFileSync(CLAUDE_SETTINGS, 'utf-8');
-        let settings: Record<string, unknown>;
-        try {
-            settings = JSON.parse(raw);
-        } catch {
-            return;
-        }
+    if (!Array.isArray(settings.hooks.Stop)) {
+        settings.hooks.Stop = [];
+    }
 
-        const hookPath = HOOK_FILE.replace(/\\/g, '/');
-        const isWindows = process.platform === 'win32';
-        const hookCmd = isWindows
-            ? `python "${hookPath}"`
-            : `python3 "${hookPath}"`;
-
-        if (!settings.hooks || typeof settings.hooks !== 'object') {
-            settings.hooks = {};
-        }
-        const hooks = settings.hooks as Record<string, unknown[]>;
-
-        if (!Array.isArray(hooks.Stop)) {
-            hooks.Stop = [];
-        }
-
-        // Find existing hook entry and check if path needs updating
-        let found = false;
-        let updated = false;
-        for (const entry of hooks.Stop as any[]) {
-            for (const h of entry?.hooks || []) {
-                if (typeof h?.command === 'string' && h.command.includes('hook_send_formulas')) {
-                    found = true;
-                    if (h.command !== hookCmd) {
-                        h.command = hookCmd;
+    let found = false;
+    let updated = false;
+    for (const entry of settings.hooks.Stop) {
+        const entryHooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
+        for (const h of entryHooks) {
+            if (typeof h?.command === 'string' && h.command.includes('hook_send_formulas')) {
+                found = true;
+                for (const [key, value] of Object.entries(hook)) {
+                    if (h[key] !== value) {
+                        h[key] = value;
                         updated = true;
                     }
                 }
             }
         }
+    }
 
-        if (!found) {
-            hooks.Stop.push({
-                hooks: [{
-                    type: 'command',
-                    command: hookCmd,
-                    timeout: 5,
-                    async: true,
-                }]
-            });
-            updated = true;
+    if (!found) {
+        settings.hooks.Stop.push({ hooks: [hook] });
+        updated = true;
+    }
+
+    return updated;
+}
+
+function hasMathRenderHook(filePath: string): boolean {
+    const settings = readJsonObject(filePath);
+    if (!settings || !settings.hooks || typeof settings.hooks !== 'object') {
+        return false;
+    }
+
+    const stopHooks = (settings.hooks as Record<string, any>).Stop;
+    if (!Array.isArray(stopHooks)) {
+        return false;
+    }
+
+    return stopHooks.some((entry: any) =>
+        Array.isArray(entry?.hooks) &&
+        entry.hooks.some((h: any) => typeof h?.command === 'string' && h.command.includes('hook_send_formulas'))
+    );
+}
+
+function installClaudeHook(hookCmd: string): boolean {
+    const settings = readJsonObject(CLAUDE_SETTINGS);
+    if (!settings) {
+        return false;
+    }
+
+    const updated = ensureStopHook(settings, {
+        type: 'command',
+        command: hookCmd,
+        timeout: 5,
+        async: true,
+    });
+
+    if (updated) {
+        fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
+        atomicWrite(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n');
+    }
+
+    return updated;
+}
+
+function installCodexHook(hookCmd: string): boolean {
+    const settings = readJsonObject(CODEX_HOOKS);
+    if (!settings) {
+        return false;
+    }
+
+    const updated = ensureStopHook(settings, {
+        type: 'command',
+        command: hookCmd,
+        timeout: 5,
+        statusMessage: 'Sending LaTeX to MathRender',
+    });
+
+    if (updated) {
+        fs.mkdirSync(path.dirname(CODEX_HOOKS), { recursive: true });
+        atomicWrite(CODEX_HOOKS, JSON.stringify(settings, null, 2) + '\n');
+        setRestrictivePerms(CODEX_HOOKS);
+    }
+
+    return updated;
+}
+
+function ensureHookInstalled(extensionUri: vscode.Uri): void {
+    try {
+        copyBundledHook(extensionUri);
+        const hookCmd = getHookCommand();
+        const updatedAgents: string[] = [];
+
+        if (installClaudeHook(hookCmd)) {
+            updatedAgents.push('Claude Code');
+        }
+        if (installCodexHook(hookCmd)) {
+            updatedAgents.push('Codex');
         }
 
-        if (updated) {
-            atomicWrite(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2) + '\n');
-            vscode.window.showInformationMessage(
-                found ? 'MathRender: Hook path updated' : 'MathRender: Hook installed for Claude Code'
-            );
+        if (updatedAgents.length > 0) {
+            vscode.window.showInformationMessage(`MathRender: Hook installed or updated for ${updatedAgents.join(', ')}`);
         }
     } catch (err) {
         console.error('[MathRender] Hook install error:', err);
@@ -487,7 +561,9 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('mathrender.status', () => {
             const parts = [
                 `Server: ${server ? `running on port ${PORT}` : 'stopped'}`,
-                `Hook: ${fs.existsSync(HOOK_FILE) ? HOOK_FILE : 'not found'}`,
+                `Hook script: ${fs.existsSync(HOOK_FILE) ? HOOK_FILE : 'not found'}`,
+                `Claude: ${hasMathRenderHook(CLAUDE_SETTINGS) ? 'installed' : 'not installed'}`,
+                `Codex: ${hasMathRenderHook(CODEX_HOOKS) ? 'installed' : 'not installed'}`,
                 `History: ${history.length}/${MAX_HISTORY} entries`,
                 `State: ${paused ? 'paused' : 'active'}`,
             ];
