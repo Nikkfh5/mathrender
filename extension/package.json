@@ -2,7 +2,7 @@
   "name": "mathrender",
   "displayName": "MathRender - LaTeX Formula Renderer for AI Coding Agents",
   "description": "Renders LaTeX formulas from Codex and Claude Code responses in a VS Code side panel with KaTeX. See math as it's meant to be seen.",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "publisher": "Nikkfh5",
   "author": {
     "name": "Nikkfh5",
@@ -118,7 +118,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test:codex": "npm run compile && node test/codexTranscript.test.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",

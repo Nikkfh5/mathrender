@@ -6,7 +6,7 @@ Instead of reading raw `$$\int_0^1 x^2 dx$$` in the terminal, you get properly t
 
 ## Features
 
-- **Codex + Claude Code support** - automatic hook installation for both agents
+- **Codex + Claude Code support** - automatic hook installation plus a zero-click Codex transcript fallback
 - **Real-time rendering** - formulas appear as agent responses finish
 - **Full markdown support** - text, headings, code blocks, tables, and math together
 - **Display and inline math** - `$$...$$`, `$...$`, `\[...\]`, and `\(...\)`
@@ -21,16 +21,16 @@ Instead of reading raw `$$\int_0^1 x^2 dx$$` in the terminal, you get properly t
 ```
 Codex or Claude Code responds with formulas
         |
-    Stop hook runs
+    Codex transcript watcher or Stop hook runs
         |
-    Python detects LaTeX outside code blocks
+    MathRender detects LaTeX outside code blocks
         |
-    HTTP POST to the VS Code extension
+    Local delivery to the VS Code extension
         |
     WebView panel renders markdown + KaTeX
 ```
 
-The extension runs a lightweight HTTP server inside VS Code. The hook script sends formula-bearing assistant responses to the local server. No external browser window is required.
+The extension runs a lightweight HTTP server inside VS Code. Codex responses are also picked up from local Codex session transcripts while the panel is open, which avoids depending on hook trust for the zero-click path. Hook scripts still send formula-bearing assistant responses to the local server for Claude Code and compatible Codex sessions. No external browser window is required.
 
 ## Quick Start
 
@@ -49,7 +49,7 @@ On activation, MathRender automatically copies its hook script to `~/.mathrender
 - Codex: `~/.codex/hooks.json`
 - Claude Code: `~/.claude/settings.json`
 
-Codex may still require hook trust review through `/hooks` before running a newly installed or changed hook. MathRender installs the hook automatically; Codex controls that security review.
+Codex may still require hook trust review through `/hooks` before running a newly installed or changed hook. MathRender installs the hook automatically; Codex controls that security review. MathRender's Codex transcript watcher runs separately from hook trust and starts when the panel is open.
 
 ## Commands
 

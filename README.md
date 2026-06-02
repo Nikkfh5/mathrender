@@ -12,21 +12,22 @@ Supported agents:
 ```
 Codex or Claude Code responds with formulas
         |
-    Agent Stop hook runs
+    Codex transcript watcher or agent Stop hook runs
         |
-    Python hook detects LaTeX outside code blocks
+    MathRender detects LaTeX outside code blocks
         |
-    HTTP POST to the VS Code extension
+    Local delivery to the VS Code extension
         |
     WebView panel renders markdown + KaTeX
 ```
 
-The extension owns the local HTTP server and rendering UI. Agent hooks are small adapters that send assistant responses to `http://127.0.0.1:18573/response`.
+The extension owns the local HTTP server and rendering UI. For Codex, MathRender also watches local Codex session transcripts as a zero-click fallback, so new formula responses can render even when Codex has not executed a command hook yet. Agent hooks remain small adapters that send assistant responses to `http://127.0.0.1:18573/response`.
 
 ## Features
 
 - Full response rendering: text and formulas together
 - Automatic hook installation for Codex and Claude Code
+- Zero-click Codex fallback through local session transcript watching
 - Python stdlib hook, no Python package dependencies
 - Session history and search
 - Pause/resume capture without closing the panel
@@ -53,7 +54,7 @@ On activation, MathRender copies the hook to `~/.mathrender/hook_send_formulas.p
 - Codex hook config in `~/.codex/hooks.json`
 - Claude Code hook config in `~/.claude/settings.json`
 
-Codex may require you to trust new or changed hooks through `/hooks` before it runs them. MathRender installs the hook definition automatically, but Codex owns that security gate.
+Codex may require you to trust new or changed hooks through `/hooks` before it runs them. MathRender installs the hook definition automatically, but Codex owns that security gate. The Codex transcript watcher is independent of hook trust and starts when the MathRender panel is open.
 
 ### From Source
 
@@ -81,7 +82,8 @@ MathRender is off by default. Open the panel when you need it.
 
 ```
 extension/              VS Code extension
-  src/extension.ts      HTTP server, WebView, commands, hook installers
+  src/extension.ts      HTTP server, WebView, commands, hook installers, Codex watcher
+  src/codexTranscript.ts
   media/index.html      Frontend: markdown + KaTeX rendering
   media/hook_send_formulas.py
 hook_send_formulas.py   Shared Codex/Claude hook

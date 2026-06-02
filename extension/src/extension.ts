@@ -3,6 +3,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { containsRenderableFormula, extractCodexAgentMessage } from './codexTranscript';
 
 const HOST = '127.0.0.1';
 let PORT = 18573; // overridden from mathrender.port setting in activate()
@@ -14,6 +15,10 @@ const HOOK_FILE = path.join(HOOK_DIR, 'hook_send_formulas.py');
 const HISTORY_FILE = path.join(HOOK_DIR, 'history.json');
 const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 const CODEX_HOOKS = path.join(os.homedir(), '.codex', 'hooks.json');
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
+const CODEX_SCAN_INTERVAL_MS = 1500;
+const CODEX_MAX_TRACKED_FILES = 64;
+const DUPLICATE_WINDOW_MS = 10000;
 
 interface HistoryEntry {
     type: string;
@@ -33,6 +38,10 @@ let history: HistoryEntry[] = [];
 let paused = false;
 let unreadCount = 0;
 let sidebarView: vscode.TreeView<string> | undefined;
+let codexScanTimer: NodeJS.Timeout | undefined;
+const codexOffsets = new Map<string, number>();
+const codexPartialLines = new Map<string, string>();
+const recentResponseTexts = new Map<string, number>();
 
 // --- Helpers ---
 
@@ -52,6 +61,30 @@ function setRestrictiveDirPerms(dirPath: string): void {
     if (process.platform !== 'win32') {
         try { fs.chmodSync(dirPath, 0o700); } catch { /* ignore */ }
     }
+}
+
+function pruneRecentResponses(now: number): void {
+    for (const [key, timestamp] of recentResponseTexts) {
+        if (now - timestamp > DUPLICATE_WINDOW_MS) {
+            recentResponseTexts.delete(key);
+        }
+    }
+}
+
+function shouldRecordResponse(text: string): boolean {
+    const key = text.trim();
+    if (!key) {
+        return false;
+    }
+
+    const now = Date.now();
+    pruneRecentResponses(now);
+    if (recentResponseTexts.has(key)) {
+        return false;
+    }
+
+    recentResponseTexts.set(key, now);
+    return true;
 }
 
 // --- Hook auto-install ---
@@ -258,6 +291,155 @@ function addToHistory(entry: HistoryEntry): void {
     history.push(entry);
 }
 
+function publishEntry(entry: HistoryEntry): void {
+    try {
+        panel?.webview.postMessage(entry);
+    } catch (err) {
+        console.error('[MathRender] postMessage error:', err);
+    }
+
+    if (!panel || !panel.visible) {
+        unreadCount++;
+        updateBadge();
+    }
+    saveHistory();
+}
+
+function addResponse(text: string, timestamp = new Date().toLocaleTimeString()): void {
+    if (paused) {
+        return;
+    }
+    if (!shouldRecordResponse(text)) {
+        return;
+    }
+
+    const entry: HistoryEntry = {
+        type: 'response',
+        text,
+        timestamp,
+    };
+    addToHistory(entry);
+    publishEntry(entry);
+}
+
+function listCodexSessionFiles(dirPath: string, files: string[] = []): string[] {
+    if (!fs.existsSync(dirPath)) {
+        return files;
+    }
+
+    let entries: fs.Dirent[];
+    try {
+        entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+        return files;
+    }
+
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+            listCodexSessionFiles(fullPath, files);
+        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+            files.push(fullPath);
+        }
+    }
+
+    return files;
+}
+
+function recentCodexSessionFiles(): string[] {
+    return listCodexSessionFiles(CODEX_SESSIONS_DIR)
+        .map(filePath => {
+            try {
+                return { filePath, mtimeMs: fs.statSync(filePath).mtimeMs };
+            } catch {
+                return undefined;
+            }
+        })
+        .filter((entry): entry is { filePath: string; mtimeMs: number } => entry !== undefined)
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)
+        .slice(0, CODEX_MAX_TRACKED_FILES)
+        .map(entry => entry.filePath);
+}
+
+function processCodexTranscriptText(filePath: string, text: string): void {
+    const pending = (codexPartialLines.get(filePath) || '') + text;
+    const lines = pending.split(/\r?\n/);
+
+    if (!pending.endsWith('\n') && !pending.endsWith('\r')) {
+        codexPartialLines.set(filePath, lines.pop() || '');
+    } else {
+        codexPartialLines.delete(filePath);
+    }
+
+    for (const line of lines) {
+        if (!line.trim()) {
+            continue;
+        }
+
+        const message = extractCodexAgentMessage(line);
+        if (message && containsRenderableFormula(message)) {
+            addResponse(message);
+        }
+    }
+}
+
+function scanCodexTranscripts(initializeOnly = false): void {
+    for (const filePath of recentCodexSessionFiles()) {
+        let stat: fs.Stats;
+        try {
+            stat = fs.statSync(filePath);
+        } catch {
+            continue;
+        }
+
+        let offset = codexOffsets.get(filePath);
+        if (offset === undefined) {
+            offset = initializeOnly ? stat.size : 0;
+        }
+        if (stat.size < offset) {
+            offset = 0;
+            codexPartialLines.delete(filePath);
+        }
+
+        if (!initializeOnly && stat.size > offset) {
+            const length = stat.size - offset;
+            const buffer = Buffer.alloc(length);
+            let fd: number | undefined;
+            try {
+                fd = fs.openSync(filePath, 'r');
+                fs.readSync(fd, buffer, 0, length, offset);
+                processCodexTranscriptText(filePath, buffer.toString('utf-8'));
+            } catch (err) {
+                console.error('[MathRender] Codex transcript read error:', err);
+            } finally {
+                if (fd !== undefined) {
+                    try { fs.closeSync(fd); } catch { /* ignore */ }
+                }
+            }
+        }
+
+        codexOffsets.set(filePath, stat.size);
+    }
+}
+
+function startCodexTranscriptWatcher(): void {
+    if (codexScanTimer) {
+        return;
+    }
+
+    scanCodexTranscripts(true);
+    codexScanTimer = setInterval(() => scanCodexTranscripts(false), CODEX_SCAN_INTERVAL_MS);
+}
+
+function stopCodexTranscriptWatcher(): void {
+    if (codexScanTimer) {
+        clearInterval(codexScanTimer);
+        codexScanTimer = undefined;
+    }
+    codexOffsets.clear();
+    codexPartialLines.clear();
+}
+
 // --- HTTP ---
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -325,13 +507,7 @@ function startHttpServer(onResponse: (entry: HistoryEntry) => void): http.Server
                         } catch {
                             data = { text: body };
                         }
-                        const entry: HistoryEntry = {
-                            type: 'response',
-                            text: data.text || '',
-                            timestamp: data.timestamp || new Date().toLocaleTimeString(),
-                        };
-                        addToHistory(entry);
-                        onResponse(entry);
+                        addResponse(data.text || '', data.timestamp || new Date().toLocaleTimeString());
                         jsonResponse(res, 200, { ok: true });
                         break;
                     }
@@ -421,20 +597,9 @@ function getWebviewHtml(extensionUri: vscode.Uri): string {
 
 function showPanel(context: vscode.ExtensionContext): void {
     if (!server) {
-        server = startHttpServer((entry) => {
-            try {
-                panel?.webview.postMessage(entry);
-            } catch (err) {
-                console.error('[MathRender] postMessage error:', err);
-            }
-            // Badge: increment if panel not visible
-            if (!panel || !panel.visible) {
-                unreadCount++;
-                updateBadge();
-            }
-            saveHistory();
-        });
+        server = startHttpServer((entry) => publishEntry(entry));
     }
+    startCodexTranscriptWatcher();
 
     if (panel) {
         panel.reveal();
@@ -524,6 +689,7 @@ function stopAll(): void {
         server.close();
         server = undefined;
     }
+    stopCodexTranscriptWatcher();
     if (panel) {
         panel.dispose();
         panel = undefined;
@@ -564,6 +730,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 `Hook script: ${fs.existsSync(HOOK_FILE) ? HOOK_FILE : 'not found'}`,
                 `Claude: ${hasMathRenderHook(CLAUDE_SETTINGS) ? 'installed' : 'not installed'}`,
                 `Codex: ${hasMathRenderHook(CODEX_HOOKS) ? 'installed' : 'not installed'}`,
+                `Codex transcript watcher: ${codexScanTimer ? 'active' : 'inactive'}`,
                 `History: ${history.length}/${MAX_HISTORY} entries`,
                 `State: ${paused ? 'paused' : 'active'}`,
             ];
@@ -591,6 +758,7 @@ export function deactivate(): void {
         server.close();
         server = undefined;
     }
+    stopCodexTranscriptWatcher();
     panel = undefined;
     cachedHtml = undefined;
 }

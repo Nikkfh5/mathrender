@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2 - 2026-06-02
+
+- **feat**: Add a Codex transcript watcher fallback that imports new formula responses from local Codex session JSONL files without requiring hook execution
+- **fix**: Deduplicate near-simultaneous responses so Codex hooks and the transcript watcher do not render the same response twice
+- **test**: Add regression tests for Codex transcript parsing and formula detection
+
 ## 0.8.1 - 2026-06-02
 
 - **fix**: Make all WebView UI text English, including the empty state and session counter
