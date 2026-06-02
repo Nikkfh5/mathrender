@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -326,7 +326,7 @@
     <div class="empty-state" id="emptyState">
       <div class="empty-icon">&int;</div>
       <div class="empty-text">
-        Ответы AI-агентов с формулами появятся здесь автоматически
+        Agent responses with formulas will appear here automatically
       </div>
     </div>
   </div>
@@ -627,16 +627,12 @@ function clearFeed() {
 
 function updateCounter() {
   counter.textContent = responseCount > 0
-    ? `${responseCount} ${pluralize(responseCount, 'ответ', 'ответа', 'ответов')} за сессию`
+    ? `${responseCount} ${pluralize(responseCount, 'response', 'responses')} this session`
     : '';
 }
 
-function pluralize(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m100 >= 11 && m100 <= 19) return many;
-  if (m10 === 1) return one;
-  if (m10 >= 2 && m10 <= 4) return few;
-  return many;
+function pluralize(n, one, many) {
+  return n === 1 ? one : many;
 }
 
 // Receive messages from VS Code extension

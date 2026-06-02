@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 - 2026-06-02
+
+- **fix**: Make all WebView UI text English, including the empty state and session counter
+- **test**: Add a regression test that blocks Cyrillic user-facing text in the WebView
+
 ## 0.8.0 - 2026-06-02
 
 - **feat**: Auto-install MathRender hooks for Codex via `~/.codex/hooks.json`
